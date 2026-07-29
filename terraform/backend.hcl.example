@@ -1,0 +1,5 @@
+# Copy to backend.hcl and set the bucket name to match:
+#   terraform output -raw terraform_state_bucket
+#
+# Naming convention: teacher-wang-tfstate-<aws_account_id>
+bucket = "teacher-wang-tfstate-ACCOUNT_ID"

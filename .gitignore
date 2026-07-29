@@ -6,6 +6,7 @@ config
 **/terraform.tfstate
 **/terraform.tfstate.*
 **/terraform.tfvars
+**/backend.hcl
 **/crash.log
 **/crash.*.log
 **/override.tf

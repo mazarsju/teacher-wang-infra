@@ -1,6 +1,4 @@
-# Bootstrap / connectivity check.
-# This data source confirms Terraform can authenticate against AWS.
-# Real infrastructure modules (VPC, EKS, RDS, etc.) will replace this later.
+# Account / region context used by naming and default tags.
 
 data "aws_caller_identity" "current" {}
 
