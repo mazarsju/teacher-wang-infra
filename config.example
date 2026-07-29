@@ -1,0 +1,16 @@
+# AWS credentials for local Terraform usage
+# Copy this file to `config` and fill in your values:
+#   cp config.example config
+#
+# Then load it into your shell before running Terraform:
+#   source ./config
+#
+# Do not commit `config` — it is gitignored. Better secret management
+# (IAM roles, AWS SSO, Secrets Manager, CI OIDC) will come later.
+
+export AWS_ACCESS_KEY_ID="YOUR_ACCESS_KEY_ID"
+export AWS_SECRET_ACCESS_KEY="YOUR_SECRET_ACCESS_KEY"
+export AWS_DEFAULT_REGION="eu-west-1"
+
+# Optional: use a named profile instead of access keys
+# export AWS_PROFILE="teacher-wang"
