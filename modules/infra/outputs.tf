@@ -138,3 +138,33 @@ output "ecr_registry_id" {
   value       = aws_ecr_repository.app["backend"].registry_id
 }
 
+output "ecs_enabled" {
+  description = "Whether the ECS cluster and capacity are provisioned"
+  value       = var.enable_ecs
+}
+
+output "ecs_cluster_name" {
+  description = "ECS cluster name (null when enable_ecs is false)"
+  value       = try(aws_ecs_cluster.main[0].name, null)
+}
+
+output "ecs_cluster_arn" {
+  description = "ECS cluster ARN (null when enable_ecs is false)"
+  value       = try(aws_ecs_cluster.main[0].arn, null)
+}
+
+output "ecs_capacity_provider_name" {
+  description = "ECS EC2 capacity provider name (null when enable_ecs is false)"
+  value       = try(aws_ecs_capacity_provider.ec2[0].name, null)
+}
+
+output "ecs_task_execution_role_arn" {
+  description = "IAM role ARN for ECS task execution / ECR pulls (null when enable_ecs is false)"
+  value       = try(aws_iam_role.ecs_task_execution[0].arn, null)
+}
+
+output "ecs_autoscaling_group_name" {
+  description = "Autoscaling group for ECS container instances (null when enable_ecs is false)"
+  value       = try(aws_autoscaling_group.ecs[0].name, null)
+}
+

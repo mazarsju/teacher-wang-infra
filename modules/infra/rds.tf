@@ -19,9 +19,9 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_db_instance" "main" {
   identifier = "${local.name_prefix}-postgres"
 
-  engine               = "postgres"
-  engine_version       = var.db_engine_version
-  instance_class       = var.db_instance_class
+  engine                = "postgres"
+  engine_version        = var.db_engine_version
+  instance_class        = var.db_instance_class
   allocated_storage     = var.db_allocated_storage_gb
   max_allocated_storage = var.db_max_allocated_storage_gb > 0 ? var.db_max_allocated_storage_gb : null
   storage_type          = "gp3"
@@ -43,8 +43,8 @@ resource "aws_db_instance" "main" {
   backup_window           = "03:00-04:00"
   maintenance_window      = "mon:04:00-mon:05:00"
 
-  deletion_protection = var.db_deletion_protection
-  skip_final_snapshot = !var.db_deletion_protection
+  deletion_protection       = var.db_deletion_protection
+  skip_final_snapshot       = !var.db_deletion_protection
   final_snapshot_identifier = var.db_deletion_protection ? "${local.name_prefix}-postgres-final" : null
 
   # Performance Insights and enhanced monitoring add cost — leave off for now.

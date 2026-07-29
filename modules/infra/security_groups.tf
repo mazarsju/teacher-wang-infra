@@ -1,5 +1,5 @@
 # Security group baselines for future ALB → app → DB traffic.
-# Rules stay minimal; tighten further when EKS/RDS are introduced.
+# Rules stay minimal; tighten further when ECS services / ALB are introduced.
 #
 # Cost: security groups are free.
 # Naming: AWS `name` and Name tag use the same value ({name_prefix}-{role}).
@@ -42,7 +42,7 @@ resource "aws_vpc_security_group_egress_rule" "alb_all" {
 
 resource "aws_security_group" "app" {
   name        = "${local.name_prefix}-app"
-  description = "Baseline for private application workloads (EKS nodes / pods)"
+  description = "Baseline for application workloads (ECS instances / tasks)"
   vpc_id      = aws_vpc.main.id
 
   tags = merge(local.resource_tags, {
@@ -52,7 +52,7 @@ resource "aws_security_group" "app" {
 }
 
 # Allow ALB health checks and HTTP traffic into the app tier.
-# Port range is broad for EKS/node-port flexibility; narrow when services are fixed.
+# Port range is broad for container-port flexibility; narrow when services are fixed.
 resource "aws_vpc_security_group_ingress_rule" "app_from_alb" {
   security_group_id            = aws_security_group.app.id
   description                  = "HTTP from ALB"

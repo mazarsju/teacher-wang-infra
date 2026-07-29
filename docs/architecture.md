@@ -3,10 +3,13 @@
 Living overview of the AWS layout provisioned by this repository.
 Update this file whenever components are added, removed, or rewired.
 
-## Current state (networking + data + registry)
+Platform decision (ECS vs EKS): [`architecture-choice-ecs.md`](architecture-choice-ecs.md).
+
+## Current state (networking + data + registry + optional ECS)
 
 Provisioned today: remote state, VPC, subnets, IGW, optional single NAT, route tables, security group baselines, RDS PostgreSQL (single-AZ, `db.t4g.micro`), and ECR repositories for backend/frontend images.
-Not yet provisioned (shown dashed in the target view): EKS, ALB, CloudFront.
+ECS is **optional** via `enable_ecs` (default `false`) — control plane is free; cost is the Spot EC2 instance only.
+Not yet provisioned (shown dashed in the target view): ECS services/tasks, ALB, CloudFront.
 
 ### High-level AWS account
 
@@ -29,7 +32,7 @@ flowchart TB
 
 ### VPC networking
 
-Cost choice: **one NAT Gateway** in the first public subnet, shared by all private subnets (`enable_nat_gateway`).
+Cost choice: **one NAT Gateway** in the first public subnet, shared by all private subnets (`enable_nat_gateway`). ECS capacity currently uses **public** subnets with a public IP, so NAT is not required for the cluster.
 
 ```mermaid
 flowchart TB
@@ -91,7 +94,7 @@ flowchart LR
 | Security group | Purpose | Ingress | Egress |
 | --- | --- | --- | --- |
 | `alb` | Future public ALB | TCP 80, 443 from internet | all |
-| `app` | Future EKS / app workloads | TCP 1–65535 from `alb` | all (NAT for pulls / AWS APIs) |
+| `app` | ECS instances / tasks | TCP 1–65535 from `alb` | all (ECR / AWS APIs via public IP or NAT) |
 | `db` | RDS PostgreSQL | TCP 5432 from `app` | none defined |
 
 ### RDS PostgreSQL
@@ -114,6 +117,19 @@ flowchart LR
 | Scan on push | basic | Free vulnerability scan |
 | Lifecycle | expire untagged after 7d; keep last 10 tags | Cap storage cost |
 | Tag mutability | mutable | Convenient `:latest` while iterating |
+
+### ECS (optional — `enable_ecs`)
+
+Toggle in `environments/prod/main.tf`. See [`architecture-choice-ecs.md`](architecture-choice-ecs.md).
+
+| Setting | Value | Rationale |
+| --- | --- | --- |
+| Cluster | `teacher-wang-prod-ecs` | One cluster for frontend + backend |
+| Capacity | 1× Spot `t4g.small` (min 0, max 2) | Cheap ARM host; bin-pack both apps |
+| Subnets | Public + public IP | Pull from ECR without NAT |
+| Instance SG | `app` | Tasks/instances can reach RDS on 5432 |
+| Insights | Disabled | Avoid CloudWatch ingestion cost |
+| Services / ALB | Not yet | Next roadmap items |
 
 ### Terraform remote state
 
@@ -143,8 +159,11 @@ flowchart TB
   subgraph VPC["VPC"]
     ALB["ALB — planned<br/>public subnets · SG alb"]
 
+    subgraph Public["Public subnets"]
+      ECS["ECS cluster + Spot EC2<br/>toggle: enable_ecs<br/>SG app"]
+    end
+
     subgraph Private["Private subnets"]
-      EKS["EKS + node group — planned<br/>SG app"]
       RDS["RDS PostgreSQL<br/>SG db"]
     end
 
@@ -154,14 +173,15 @@ flowchart TB
   ECR["ECR<br/>backend · frontend"]
   SM["Secrets Manager<br/>(RDS master password today)"]
 
-  ALB --> EKS
-  EKS --> RDS
-  EKS --> NAT
-  EKS --> ECR
-  EKS -.-> SM
+  ALB --> ECS
+  ECS --> RDS
+  ECS --> ECR
+  ECS -.-> SM
   RDS -.-> SM
   CF -.->|API calls| ALB
 ```
+
+ECS and NAT are off by default (`enable_ecs` / `enable_nat_gateway` = `false` in prod).
 
 ## Environments
 
@@ -169,7 +189,7 @@ Each environment directory is a **Terraform root**. Shared resources live in `mo
 
 | Path | Role |
 | --- | --- |
-| `modules/infra` | VPC, NAT, route tables, security groups, state bucket, RDS, ECR |
+| `modules/infra` | VPC, NAT, route tables, security groups, state bucket, RDS, ECR, optional ECS |
 | `environments/common` | Shared defaults module (`project_name`, `aws_region`, `az_count`) |
 | `environments/prod` | Prod root — `cd environments/prod && terraform plan` |
 
@@ -195,19 +215,23 @@ Summary:
 - **Required tags (provider default_tags):** `Project`, `Environment`, `ManagedBy`
 - **Resource tags:** `Name` (always), `Tier` (`public` / `private` / `data` / `shared`)
 
-## Cost posture (current networking)
+## Cost posture
 
 | Component | Cost impact | Notes |
 | --- | --- | --- |
 | VPC, subnets, route tables, SGs, IGW | Free | — |
-| Single NAT Gateway + EIP | Paid (~$32/mo + data) | Toggle with `enable_nat_gateway` |
+| Single NAT Gateway + EIP | Paid (~$32/mo + data) | Toggle with `enable_nat_gateway`; not needed for current ECS placement |
 | RDS `db.t4g.micro` single-AZ | Paid (~$12–15/mo + storage) | No Multi-AZ / PI / enhanced monitoring |
 | RDS-managed Secrets Manager secret | Paid (~$0.40/mo) | Master password |
 | ECR (empty / light use) | Near-free | Storage + data transfer; lifecycle keeps image count low |
+| ECS control plane | **Free** | Why we chose ECS over EKS |
+| ECS Spot `t4g.small` | Paid (~$5–12/mo) when on | Toggle with `enable_ecs` (default off) |
+| EKS control plane | Avoided (~$73/mo) | See architecture-choice doc |
 | Per-AZ NAT | Avoided | Would multiply NAT cost; single NAT is enough for now |
 
 ## Related docs
 
 - [README.md](../README.md) — roadmap, getting started, tech choices
+- [architecture-choice-ecs.md](architecture-choice-ecs.md) — why ECS instead of EKS
 - [tagging-and-naming.md](tagging-and-naming.md) — Name pattern and required tags
 - [agent.md](../agent.md) — agent rules (keep README + docs in sync)

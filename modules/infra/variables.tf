@@ -39,8 +39,50 @@ variable "az_count" {
 }
 
 variable "enable_nat_gateway" {
-  description = "Create a single NAT Gateway for private subnet outbound internet (~$32/mo + data). Disable until EKS/RDS need egress to save cost."
+  description = "Create a single NAT Gateway for private subnet outbound internet (~$32/mo + data). Not required for ECS on public subnets."
   type        = bool
+}
+
+variable "enable_ecs" {
+  description = "Provision ECS cluster + EC2 Spot capacity (~instance cost only; ECS control plane is free). Set false when idle."
+  type        = bool
+  default     = false
+}
+
+variable "ecs_instance_type" {
+  description = "EC2 instance type for the ECS capacity provider (prefer t4g.* for ARM cost)"
+  type        = string
+  default     = "t4g.small"
+}
+
+variable "ecs_use_spot" {
+  description = "Use Spot instances for ECS capacity (cheaper; can be interrupted)"
+  type        = bool
+  default     = true
+}
+
+variable "ecs_desired_capacity" {
+  description = "Desired number of ECS container instances (one is enough for frontend + backend)"
+  type        = number
+  default     = 1
+}
+
+variable "ecs_min_capacity" {
+  description = "Minimum number of ECS container instances"
+  type        = number
+  default     = 0
+}
+
+variable "ecs_max_capacity" {
+  description = "Maximum number of ECS container instances"
+  type        = number
+  default     = 2
+}
+
+variable "ecs_instance_disk_size_gb" {
+  description = "Root volume size (GiB) for each ECS container instance"
+  type        = number
+  default     = 30
 }
 
 variable "additional_tags" {

@@ -133,3 +133,33 @@ output "ecr_registry_id" {
   description = "AWS account ID of the ECR registry"
   value       = module.infra.ecr_registry_id
 }
+
+output "ecs_enabled" {
+  description = "Whether the ECS cluster and capacity are provisioned"
+  value       = module.infra.ecs_enabled
+}
+
+output "ecs_cluster_name" {
+  description = "ECS cluster name (null when enable_ecs is false)"
+  value       = module.infra.ecs_cluster_name
+}
+
+output "ecs_cluster_arn" {
+  description = "ECS cluster ARN (null when enable_ecs is false)"
+  value       = module.infra.ecs_cluster_arn
+}
+
+output "ecs_capacity_provider_name" {
+  description = "ECS EC2 capacity provider name (null when enable_ecs is false)"
+  value       = module.infra.ecs_capacity_provider_name
+}
+
+output "ecs_task_execution_role_arn" {
+  description = "IAM role ARN for ECS task execution / ECR pulls (null when enable_ecs is false)"
+  value       = module.infra.ecs_task_execution_role_arn
+}
+
+output "ecs_autoscaling_group_name" {
+  description = "Autoscaling group for ECS container instances (null when enable_ecs is false)"
+  value       = module.infra.ecs_autoscaling_group_name
+}

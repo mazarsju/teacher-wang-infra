@@ -5,7 +5,7 @@
 # - map_public_ip_on_launch is false to avoid accidental public IPv4 charges.
 # - Single NAT Gateway in one public subnet for all private AZs (~$32/mo + data).
 #   One NAT per AZ is much more expensive; enable only when private outbound is needed
-#   (set enable_nat_gateway = false to avoid the charge until EKS/RDS need it).
+#   (set enable_nat_gateway = false to avoid the charge; ECS currently uses public IPs instead).
 
 data "aws_availability_zones" "available" {
   state = "available"

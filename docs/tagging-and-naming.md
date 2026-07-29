@@ -39,6 +39,10 @@ Implemented in Terraform as `local.name_prefix = "${var.project_name}-${var.envi
 | RDS PostgreSQL | `teacher-wang-prod-postgres` |
 | ECR backend | `teacher-wang-prod-backend` |
 | ECR frontend | `teacher-wang-prod-frontend` |
+| ECS cluster | `teacher-wang-prod-ecs` |
+| ECS capacity provider | `teacher-wang-prod-ec2` |
+| ECS instance IAM role / profile | `teacher-wang-prod-ecs-instance` |
+| ECS task execution IAM role | `teacher-wang-prod-ecs-exec` |
 
 ### Exceptions
 
@@ -88,14 +92,11 @@ Extra tags can be passed into the infra module via `additional_tags` and are mer
 - Individual security group **rules** — they inherit `default_tags`; no custom `Name` needed.
 - Route table **associations** and plain **routes** — not useful in the console.
 
-## Future (EKS / ALB)
+## Future (ALB)
 
-When adding Kubernetes and load balancers, also apply AWS/controller conventions where required, for example:
+When adding load balancers in front of ECS, tag public subnets for discovery if using an AWS Load Balancer Controller–style workflow, or rely on explicit Terraform subnet IDs (preferred for this repo’s small footprint).
 
-- `kubernetes.io/role/elb` / `kubernetes.io/role/internal-elb` on subnets
-- `kubernetes.io/cluster/<cluster-name> = shared|owned`
-
-Those are additive and must not replace the tags above.
+Those conventions are additive and must not replace the tags above.
 
 ## Checklist for new resources
 

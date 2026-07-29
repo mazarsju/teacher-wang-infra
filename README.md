@@ -8,13 +8,14 @@ The application is composed of:
 
 | Component | Stack (app repo) | Target hosting |
 | --- | --- | --- |
-| Frontend | React, TypeScript, Vite | AWS (CDN / container) |
-| Backend | Python, Flask, SQLAlchemy | AWS (Kubernetes on EKS) |
-| Database | SQLite today → managed DB in cloud | AWS RDS (PostgreSQL planned) |
+| Frontend | React, TypeScript, Vite | AWS (CDN / ECS container) |
+| Backend | Python, Flask, SQLAlchemy | AWS (**ECS** on EC2) |
+| Database | SQLite today → managed DB in cloud | AWS RDS (PostgreSQL) |
 
 This repo provisions and wires those pieces together with **Terraform**.
 
-System shape (current + planned): [`docs/architecture.md`](docs/architecture.md).
+System shape (current + planned): [`docs/architecture.md`](docs/architecture.md).  
+Why ECS not EKS: [`docs/architecture-choice-ecs.md`](docs/architecture-choice-ecs.md).  
 Naming and tags: [`docs/tagging-and-naming.md`](docs/tagging-and-naming.md).
 
 ## Technologies
@@ -24,11 +25,11 @@ Naming and tags: [`docs/tagging-and-naming.md`](docs/tagging-and-naming.md).
 | IaC | Terraform (>= 1.10) |
 | Cloud | Amazon Web Services (AWS) |
 | Remote state | **S3** with native lock files (`use_lockfile`, no DynamoDB) |
-| Orchestration | Kubernetes on **Amazon EKS** |
+| Orchestration | **Amazon ECS** on EC2 (Spot Graviton) — not EKS |
 | Containers | **Amazon ECR** (image registry) |
-| Networking | VPC, IGW, single NAT, route tables, security groups, ALB/NLB (planned) |
+| Networking | VPC, IGW, single NAT (optional), route tables, security groups, ALB (planned) |
 | Database | **Amazon RDS** PostgreSQL (`db.t4g.micro`, single-AZ) |
-| Frontend delivery | S3 + CloudFront and/or ingress on EKS (TBD) |
+| Frontend delivery | ECS service and/or S3 + CloudFront (TBD) |
 | Secrets (now) | RDS master password in **Secrets Manager** (RDS-managed); broader secrets later |
 | Credentials (now) | Local gitignored `config` file — temporary |
 | Cost posture | Cheapest viable defaults (see `agent.md`) |
@@ -44,13 +45,14 @@ Naming and tags: [`docs/tagging-and-naming.md`](docs/tagging-and-naming.md).
 - **Security groups** — baselines for ALB (80/443), app (from ALB), and DB (5432 from app)
 - **RDS** — PostgreSQL 16, `db.t4g.micro`, single-AZ, private subnets; master password in Secrets Manager
 - **ECR** — private repos for backend and frontend images (AES256, scan-on-push, lifecycle retention)
+- **ECS** — optional (`enable_ecs`); free control plane + Spot `t4g.small` capacity in public subnets (off by default)
 
 **Planned**
 
-- **EKS** — run the Flask API (and optionally the frontend) as containers
-- **ALB** — HTTP(S) ingress to Kubernetes services
-- **S3 / CloudFront** — static frontend hosting (if not served from the cluster)
-- **IAM** — least-privilege roles for Terraform, nodes, and workloads
+- **ECS task definitions / services** — run frontend and backend from ECR
+- **ALB** — HTTP(S) ingress to ECS services
+- **S3 / CloudFront** — static frontend hosting (if not served from ECS)
+- **IAM** — least-privilege roles for Terraform and workloads (instance + task execution roles exist when ECS is on)
 - **Route 53** — DNS (when a public domain is configured)
 
 ## Repository structure
@@ -63,10 +65,11 @@ teacher-wang-infra/
 ├── config.example           # Template for local AWS credentials
 ├── config                   # Your secrets (gitignored) — copy from config.example
 ├── docs/
-│   ├── architecture.md      # System diagrams (current + planned)
-│   └── tagging-and-naming.md # Resource Name pattern and required tags
+│   ├── architecture.md              # System diagrams (current + planned)
+│   ├── architecture-choice-ecs.md   # Why ECS instead of EKS
+│   └── tagging-and-naming.md        # Resource Name pattern and required tags
 ├── modules/
-│   └── infra/               # Shared module: naming, vpc, SGs, state, rds, ecr, …
+│   └── infra/               # Shared module: naming, vpc, SGs, state, rds, ecr, ecs, …
 └── environments/
     ├── common/              # Shared defaults module (project, region, AZ count)
     └── prod/                # Prod root — cd here and run terraform plan/apply
@@ -141,7 +144,7 @@ No `-var-file` flags needed: prod values live in `environments/prod/main.tf`; sh
 
 ### Push images to ECR (from teacher-wang-app)
 
-Repos are region-account scoped. On an Apple Silicon Mac (M3), **always** set `--platform` so the image matches the future EKS node arch (default recommendation: `linux/amd64`; use `linux/arm64` if you later choose Graviton nodes).
+Repos are region-account scoped. ECS capacity uses **Graviton (`t4g`)** — build **`linux/arm64`**. On an Apple Silicon Mac (M3) that is the native arch.
 
 ```bash
 # From teacher-wang-infra (once): copy registry URLs
@@ -158,19 +161,38 @@ Then from **teacher-wang-app** (adjust Dockerfile paths if different):
 
 ```bash
 # Backend
-docker buildx build --platform linux/amd64 \
+docker buildx build --platform linux/arm64 \
   -t "$ECR_BACKEND:latest" \
   -f path/to/backend/Dockerfile \
   --push .
 
 # Frontend
-docker buildx build --platform linux/amd64 \
+docker buildx build --platform linux/arm64 \
   -t "$ECR_FRONTEND:latest" \
   -f path/to/frontend/Dockerfile \
   --push .
 ```
 
 Prefer a git SHA tag in addition to `:latest` once you deploy for real (`-t "$ECR_BACKEND:$(git rev-parse --short HEAD)"`).
+
+### Toggle expensive components
+
+Prod defaults keep always-on paid pieces **off**:
+
+| Flag | File | Default | Approx. cost when on |
+| --- | --- | --- | --- |
+| `enable_nat_gateway` | `environments/prod/main.tf` | `false` | ~$32/mo + data |
+| `enable_ecs` | `environments/prod/main.tf` | `false` | ~$8–20/mo Spot `t4g.small` (ECS control plane is **free**) |
+
+ECS instances use public subnets + public IP, so **NAT is not required**. To bring capacity up:
+
+```hcl
+enable_ecs = true
+```
+
+Then `terraform apply`. Set `enable_ecs = false` and apply again to destroy instances and stop the compute bill.
+
+See [`docs/architecture-choice-ecs.md`](docs/architecture-choice-ecs.md) for why this is preferred over EKS.
 
 ## Roadmap
 
@@ -198,14 +220,14 @@ Schema / migrations from the app’s SQLite models → Postgres live in **[teach
 ### 4. Container platform
 
 - [x] ECR repositories for backend and frontend
-- [ ] EKS cluster + node group
-- [ ] Cluster networking (CNI, ingress controller / ALB)
+- [x] ECS cluster + EC2 Spot capacity (gated by `enable_ecs`, default off; no EKS)
+- [ ] ECS task definitions and services (frontend + backend)
+- [ ] ALB ingress to ECS services
 
 ### 5. Application deployment
 
-- [ ] Kubernetes manifests / Helm charts for the Flask API
-- [ ] Frontend hosting (S3+CloudFront or in-cluster)
 - [ ] Wire backend ↔ RDS (secret ARN / connection URL) and frontend ↔ backend URLs / CORS
+- [ ] Frontend hosting (ECS and/or S3+CloudFront)
 - [ ] Health checks and basic observability (CloudWatch)
 
 ### 6. Secrets & CI/CD
