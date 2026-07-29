@@ -11,7 +11,9 @@ In particular, keep these README sections accurate:
 - **Repository structure** — mirror the real file tree after files are added, moved, or removed
 - **Getting started** — update commands, paths, and prerequisites when the workflow changes
 
-`README.md` is the primary source of truth for humans and agents working in this repo.
+Also update [`docs/architecture.md`](docs/architecture.md) whenever components are **added, removed, or rewired** (VPC layout, routing, security groups, compute, data, edge, secrets, CI). Keep Mermaid diagrams and the “current vs planned” sections accurate so the visual model matches what Terraform actually manages.
+
+`README.md` is the primary source of truth for status and workflow; `docs/architecture.md` is the primary source of truth for system shape.
 
 ## Minimize AWS cost
 

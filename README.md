@@ -14,6 +14,8 @@ The application is composed of:
 
 This repo provisions and wires those pieces together with **Terraform**.
 
+System shape (current + planned): [`docs/architecture.md`](docs/architecture.md).
+
 ## Technologies
 
 | Layer | Choice |
@@ -23,7 +25,7 @@ This repo provisions and wires those pieces together with **Terraform**.
 | Remote state | **S3** with native lock files (`use_lockfile`, no DynamoDB) |
 | Orchestration | Kubernetes on **Amazon EKS** |
 | Containers | **Amazon ECR** (image registry) |
-| Networking | VPC, subnets, security groups, ALB/NLB |
+| Networking | VPC, IGW, single NAT (dev), route tables, security groups, ALB/NLB (planned) |
 | Database | **Amazon RDS** (PostgreSQL planned; replaces local SQLite for SaaS) |
 | Frontend delivery | S3 + CloudFront and/or ingress on EKS (TBD) |
 | Secrets (later) | AWS Secrets Manager / SSM Parameter Store, IAM roles, OIDC for CI |
@@ -36,10 +38,12 @@ This repo provisions and wires those pieces together with **Terraform**.
 
 - **S3** — Terraform remote state + native lock files (versioned, AES256, public access blocked; noncurrent versions expire after 30 days)
 - **VPC** — isolated network with public and private subnets across 2 AZs (no auto-assign public IPs)
+- **Internet Gateway** — public subnet default route to the internet
+- **NAT Gateway** — single shared NAT in one public subnet for private outbound (toggle with `enable_nat_gateway`)
+- **Security groups** — baselines for ALB (80/443), app (from ALB), and DB (5432 from app)
 
 **Planned**
 
-- **NAT / routing** — outbound internet for private subnets; route tables and security groups
 - **EKS** — run the Flask API (and optionally the frontend) as containers
 - **ECR** — store backend/frontend container images
 - **RDS** — managed PostgreSQL for the knowledge base and app data
@@ -52,11 +56,13 @@ This repo provisions and wires those pieces together with **Terraform**.
 
 ```
 teacher-wang-infra/
-├── agent.md                 # Instructions for coding agents (keep README in sync)
+├── agent.md                 # Instructions for coding agents (keep README + architecture in sync)
 ├── README.md                # Source of truth for status, stack, and layout
 ├── .gitignore               # Ignores local secrets, Terraform state, OS junk
 ├── config.example           # Template for local AWS credentials
 ├── config                   # Your secrets (gitignored) — copy from config.example
+├── docs/
+│   └── architecture.md      # System diagrams (current + planned)
 └── terraform/
     ├── .terraform.lock.hcl  # Provider version lock (committed)
     ├── backend.tf           # S3 remote state + native S3 locking
@@ -67,8 +73,9 @@ teacher-wang-infra/
     ├── variables.tf         # Root input variables
     ├── main.tf              # Account / region data sources
     ├── state.tf             # S3 bucket for Terraform state and locks
-    ├── vpc.tf               # VPC + public/private subnets across AZs
-    └── outputs.tf           # Account, region, state, VPC / subnet outputs
+    ├── vpc.tf               # VPC, subnets, IGW, single NAT, route tables
+    ├── security_groups.tf   # Baseline SGs (alb / app / db)
+    └── outputs.tf           # Account, region, state, VPC / networking outputs
 ```
 
 ## Getting started
@@ -138,7 +145,7 @@ terraform output
 ### 2. Networking foundation
 
 - [x] VPC, public/private subnets across AZs
-- [ ] NAT, route tables, security group baselines (prefer single NAT in `dev` for cost)
+- [x] NAT, route tables, security group baselines (single NAT in `dev` for cost; `enable_nat_gateway` to toggle)
 - [ ] Tagging and naming conventions
 
 ### 3. Data layer
