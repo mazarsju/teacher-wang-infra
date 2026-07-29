@@ -3,10 +3,10 @@
 Living overview of the AWS layout provisioned by this repository.
 Update this file whenever components are added, removed, or rewired.
 
-## Current state (networking + data)
+## Current state (networking + data + registry)
 
-Provisioned today: remote state, VPC, subnets, IGW, optional single NAT, route tables, security group baselines, and RDS PostgreSQL (single-AZ, `db.t4g.micro`).
-Not yet provisioned (shown dashed in the target view): EKS, ECR, ALB, CloudFront.
+Provisioned today: remote state, VPC, subnets, IGW, optional single NAT, route tables, security group baselines, RDS PostgreSQL (single-AZ, `db.t4g.micro`), and ECR repositories for backend/frontend images.
+Not yet provisioned (shown dashed in the target view): EKS, ALB, CloudFront.
 
 ### High-level AWS account
 
@@ -15,6 +15,7 @@ flowchart TB
   subgraph Account["AWS account"]
     TF["Terraform operators<br/>(local credentials for now)"]
     S3State["S3 state bucket<br/>teacher-wang-tfstate-&lt;account&gt;<br/>versioned · AES256 · use_lockfile"]
+    ECR["ECR repos<br/>backend · frontend"]
 
     subgraph Region["Region: eu-west-1 (default)"]
       VPC["VPC 10.0.0.0/16"]
@@ -23,6 +24,7 @@ flowchart TB
 
   TF -->|plan / apply| S3State
   TF --> VPC
+  TF --> ECR
 ```
 
 ### VPC networking
@@ -103,6 +105,16 @@ flowchart LR
 | Password | RDS-managed Secrets Manager secret | No password in Terraform state |
 | Backups | 1-day retention | Free-tier account limit; raise when upgrading the account plan |
 
+### ECR repositories
+
+| Setting | Value | Rationale |
+| --- | --- | --- |
+| Repos | `teacher-wang-prod-backend`, `teacher-wang-prod-frontend` | One image stream per app component |
+| Encryption | AES256 | No CMK charge |
+| Scan on push | basic | Free vulnerability scan |
+| Lifecycle | expire untagged after 7d; keep last 10 tags | Cap storage cost |
+| Tag mutability | mutable | Convenient `:latest` while iterating |
+
 ### Terraform remote state
 
 ```mermaid
@@ -139,13 +151,13 @@ flowchart TB
     NAT["Single NAT Gateway (optional)"]
   end
 
-  ECR["ECR — planned"]
+  ECR["ECR<br/>backend · frontend"]
   SM["Secrets Manager<br/>(RDS master password today)"]
 
   ALB --> EKS
   EKS --> RDS
   EKS --> NAT
-  EKS -.-> ECR
+  EKS --> ECR
   EKS -.-> SM
   RDS -.-> SM
   CF -.->|API calls| ALB
@@ -157,7 +169,7 @@ Each environment directory is a **Terraform root**. Shared resources live in `mo
 
 | Path | Role |
 | --- | --- |
-| `modules/infra` | VPC, NAT, route tables, security groups, state bucket, RDS |
+| `modules/infra` | VPC, NAT, route tables, security groups, state bucket, RDS, ECR |
 | `environments/common` | Shared defaults module (`project_name`, `aws_region`, `az_count`) |
 | `environments/prod` | Prod root — `cd environments/prod && terraform plan` |
 
@@ -191,6 +203,7 @@ Summary:
 | Single NAT Gateway + EIP | Paid (~$32/mo + data) | Toggle with `enable_nat_gateway` |
 | RDS `db.t4g.micro` single-AZ | Paid (~$12–15/mo + storage) | No Multi-AZ / PI / enhanced monitoring |
 | RDS-managed Secrets Manager secret | Paid (~$0.40/mo) | Master password |
+| ECR (empty / light use) | Near-free | Storage + data transfer; lifecycle keeps image count low |
 | Per-AZ NAT | Avoided | Would multiply NAT cost; single NAT is enough for now |
 
 ## Related docs

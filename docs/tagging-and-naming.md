@@ -37,6 +37,8 @@ Implemented in Terraform as `local.name_prefix = "${var.project_name}-${var.envi
 | DB security group | `teacher-wang-prod-db` |
 | DB subnet group | `teacher-wang-prod-db` |
 | RDS PostgreSQL | `teacher-wang-prod-postgres` |
+| ECR backend | `teacher-wang-prod-backend` |
+| ECR frontend | `teacher-wang-prod-frontend` |
 
 ### Exceptions
 
@@ -79,7 +81,7 @@ Extra tags can be passed into the infra module via `additional_tags` and are mer
 | `public` | Public subnets, public route tables, ALB SG |
 | `private` | Private subnets, private route tables, app SG |
 | `data` | Database SG, DB subnet group, RDS |
-| `shared` | Account-level resources (state bucket) |
+| `shared` | Account-level or registry resources (state bucket, ECR) |
 
 ### What not to tag
 

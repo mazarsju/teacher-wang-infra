@@ -2,7 +2,7 @@
 
 # teacher-wang-infra
 
-Infrastructure-as-code repository for hosting **[teacher-wang](https://github.com/mazarsju/teacher-wang)** on AWS.
+Infrastructure-as-code repository for hosting **[teacher-wang-app](https://github.com/mazarsju/teacher-wang-app)** on AWS.
 
 The application is composed of:
 
@@ -43,11 +43,11 @@ Naming and tags: [`docs/tagging-and-naming.md`](docs/tagging-and-naming.md).
 - **NAT Gateway** — single shared NAT in one public subnet for private outbound (toggle with `enable_nat_gateway`)
 - **Security groups** — baselines for ALB (80/443), app (from ALB), and DB (5432 from app)
 - **RDS** — PostgreSQL 16, `db.t4g.micro`, single-AZ, private subnets; master password in Secrets Manager
+- **ECR** — private repos for backend and frontend images (AES256, scan-on-push, lifecycle retention)
 
 **Planned**
 
 - **EKS** — run the Flask API (and optionally the frontend) as containers
-- **ECR** — store backend/frontend container images
 - **ALB** — HTTP(S) ingress to Kubernetes services
 - **S3 / CloudFront** — static frontend hosting (if not served from the cluster)
 - **IAM** — least-privilege roles for Terraform, nodes, and workloads
@@ -66,7 +66,7 @@ teacher-wang-infra/
 │   ├── architecture.md      # System diagrams (current + planned)
 │   └── tagging-and-naming.md # Resource Name pattern and required tags
 ├── modules/
-│   └── infra/               # Shared module: naming, vpc, SGs, state, rds, …
+│   └── infra/               # Shared module: naming, vpc, SGs, state, rds, ecr, …
 └── environments/
     ├── common/              # Shared defaults module (project, region, AZ count)
     └── prod/                # Prod root — cd here and run terraform plan/apply
@@ -139,6 +139,39 @@ terraform output
 
 No `-var-file` flags needed: prod values live in `environments/prod/main.tf`; shared defaults come from `environments/common`.
 
+### Push images to ECR (from teacher-wang-app)
+
+Repos are region-account scoped. On an Apple Silicon Mac (M3), **always** set `--platform` so the image matches the future EKS node arch (default recommendation: `linux/amd64`; use `linux/arm64` if you later choose Graviton nodes).
+
+```bash
+# From teacher-wang-infra (once): copy registry URLs
+cd environments/prod
+source ../../config
+export AWS_REGION="$(terraform output -raw aws_region)"
+export ECR_BACKEND="$(terraform output -raw ecr_backend_repository_url)"
+export ECR_FRONTEND="$(terraform output -raw ecr_frontend_repository_url)"
+aws ecr get-login-password --region "$AWS_REGION" \
+  | docker login --username AWS --password-stdin "$(echo "$ECR_BACKEND" | cut -d/ -f1)"
+```
+
+Then from **teacher-wang-app** (adjust Dockerfile paths if different):
+
+```bash
+# Backend
+docker buildx build --platform linux/amd64 \
+  -t "$ECR_BACKEND:latest" \
+  -f path/to/backend/Dockerfile \
+  --push .
+
+# Frontend
+docker buildx build --platform linux/amd64 \
+  -t "$ECR_FRONTEND:latest" \
+  -f path/to/frontend/Dockerfile \
+  --push .
+```
+
+Prefer a git SHA tag in addition to `:latest` once you deploy for real (`-t "$ECR_BACKEND:$(git rev-parse --short HEAD)"`).
+
 ## Roadmap
 
 ### 1. Repository & AWS bootstrap
@@ -158,12 +191,13 @@ No `-var-file` flags needed: prod values live in `environments/prod/main.tf`; sh
 ### 3. Data layer
 
 - [x] RDS PostgreSQL (cheap sizing: `db.t4g.micro`, single-AZ, private, Secrets Manager password)
-- [ ] Migrations path from SQLite schema used in the app
 - [ ] Backup / retention policy (currently 1-day automated backups — free-tier max)
+
+Schema / migrations from the app’s SQLite models → Postgres live in **[teacher-wang-app](https://github.com/mazarsju/teacher-wang-app)** (DB URL config + Alembic); this repo only provisions the empty database.
 
 ### 4. Container platform
 
-- [ ] ECR repositories for backend (and frontend if containerized)
+- [x] ECR repositories for backend and frontend
 - [ ] EKS cluster + node group
 - [ ] Cluster networking (CNI, ingress controller / ALB)
 
@@ -171,7 +205,7 @@ No `-var-file` flags needed: prod values live in `environments/prod/main.tf`; sh
 
 - [ ] Kubernetes manifests / Helm charts for the Flask API
 - [ ] Frontend hosting (S3+CloudFront or in-cluster)
-- [ ] Wire backend ↔ RDS and frontend ↔ backend URLs / CORS
+- [ ] Wire backend ↔ RDS (secret ARN / connection URL) and frontend ↔ backend URLs / CORS
 - [ ] Health checks and basic observability (CloudWatch)
 
 ### 6. Secrets & CI/CD

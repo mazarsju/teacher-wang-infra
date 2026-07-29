@@ -113,3 +113,28 @@ output "db_master_user_secret_arn" {
   value       = try(aws_db_instance.main.master_user_secret[0].secret_arn, null)
 }
 
+output "ecr_backend_repository_url" {
+  description = "ECR repository URL for the backend image"
+  value       = aws_ecr_repository.app["backend"].repository_url
+}
+
+output "ecr_frontend_repository_url" {
+  description = "ECR repository URL for the frontend image"
+  value       = aws_ecr_repository.app["frontend"].repository_url
+}
+
+output "ecr_backend_repository_arn" {
+  description = "ECR repository ARN for the backend image"
+  value       = aws_ecr_repository.app["backend"].arn
+}
+
+output "ecr_frontend_repository_arn" {
+  description = "ECR repository ARN for the frontend image"
+  value       = aws_ecr_repository.app["frontend"].arn
+}
+
+output "ecr_registry_id" {
+  description = "AWS account ID of the ECR registry"
+  value       = aws_ecr_repository.app["backend"].registry_id
+}
+

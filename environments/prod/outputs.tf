@@ -108,3 +108,28 @@ output "db_master_user_secret_arn" {
   value       = module.infra.db_master_user_secret_arn
   sensitive   = true
 }
+
+output "ecr_backend_repository_url" {
+  description = "ECR repository URL for the backend image"
+  value       = module.infra.ecr_backend_repository_url
+}
+
+output "ecr_frontend_repository_url" {
+  description = "ECR repository URL for the frontend image"
+  value       = module.infra.ecr_frontend_repository_url
+}
+
+output "ecr_backend_repository_arn" {
+  description = "ECR repository ARN for the backend image"
+  value       = module.infra.ecr_backend_repository_arn
+}
+
+output "ecr_frontend_repository_arn" {
+  description = "ECR repository ARN for the frontend image"
+  value       = module.infra.ecr_frontend_repository_arn
+}
+
+output "ecr_registry_id" {
+  description = "AWS account ID of the ECR registry"
+  value       = module.infra.ecr_registry_id
+}
