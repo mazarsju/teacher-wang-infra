@@ -43,3 +43,38 @@ output "availability_zones" {
   value       = local.azs
 }
 
+output "internet_gateway_id" {
+  description = "ID of the VPC Internet Gateway"
+  value       = aws_internet_gateway.main.id
+}
+
+output "nat_gateway_id" {
+  description = "ID of the single NAT Gateway (null when enable_nat_gateway is false)"
+  value       = try(aws_nat_gateway.main[0].id, null)
+}
+
+output "public_route_table_id" {
+  description = "ID of the public route table (IGW default route)"
+  value       = aws_route_table.public.id
+}
+
+output "private_route_table_id" {
+  description = "ID of the shared private route table (NAT default route when enabled)"
+  value       = aws_route_table.private.id
+}
+
+output "alb_security_group_id" {
+  description = "Baseline security group for the public ALB"
+  value       = aws_security_group.alb.id
+}
+
+output "app_security_group_id" {
+  description = "Baseline security group for private application workloads"
+  value       = aws_security_group.app.id
+}
+
+output "db_security_group_id" {
+  description = "Baseline security group for RDS PostgreSQL"
+  value       = aws_security_group.db.id
+}
+

@@ -1,11 +1,11 @@
-# Networking foundation: VPC + public/private subnets across AZs.
-# Route tables, NAT, and security groups come in the next roadmap step.
+# Networking foundation: VPC, subnets, IGW, single NAT, and route tables.
 #
 # Cost notes (dev-first):
-# - VPC/subnets themselves are free; keep az_count at the minimum (2) for HA.
+# - VPC/subnets/IGW themselves are free; keep az_count at the minimum (2) for HA.
 # - map_public_ip_on_launch is false to avoid accidental public IPv4 charges.
-# - When adding NAT: prefer a single NAT Gateway (or NAT instance) in one public
-#   subnet for dev — one NAT per AZ is much more expensive.
+# - Single NAT Gateway in one public subnet for all private AZs (~$32/mo + data).
+#   One NAT per AZ is much more expensive; enable only when private outbound is needed
+#   (set enable_nat_gateway = false to avoid the charge until EKS/RDS need it).
 
 data "aws_availability_zones" "available" {
   state = "available"
@@ -55,4 +55,88 @@ resource "aws_subnet" "private" {
     Name = "${var.project_name}-${var.environment}-private-${local.azs[count.index]}"
     Tier = "private"
   }
+}
+
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-igw"
+  }
+}
+
+# --- NAT (single gateway for cost; all private subnets share it) ---
+
+resource "aws_eip" "nat" {
+  count = var.enable_nat_gateway ? 1 : 0
+
+  domain = "vpc"
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-nat-eip"
+  }
+
+  depends_on = [aws_internet_gateway.main]
+}
+
+resource "aws_nat_gateway" "main" {
+  count = var.enable_nat_gateway ? 1 : 0
+
+  allocation_id = aws_eip.nat[0].id
+  subnet_id     = aws_subnet.public[0].id
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-nat"
+  }
+
+  depends_on = [aws_internet_gateway.main]
+}
+
+# --- Route tables ---
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-public-rt"
+    Tier = "public"
+  }
+}
+
+resource "aws_route" "public_internet" {
+  route_table_id         = aws_route_table.public.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.main.id
+}
+
+resource "aws_route_table_association" "public" {
+  count = var.az_count
+
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+# One private route table for all AZs — matches the single-NAT cost choice.
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-private-rt"
+    Tier = "private"
+  }
+}
+
+resource "aws_route" "private_nat" {
+  count = var.enable_nat_gateway ? 1 : 0
+
+  route_table_id         = aws_route_table.private.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.main[0].id
+}
+
+resource "aws_route_table_association" "private" {
+  count = var.az_count
+
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private.id
 }

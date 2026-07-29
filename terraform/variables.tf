@@ -33,3 +33,9 @@ variable "az_count" {
   }
 }
 
+variable "enable_nat_gateway" {
+  description = "Create a single NAT Gateway for private subnet outbound internet (~$32/mo + data). Disable until EKS/RDS need egress to save cost."
+  type        = bool
+  default     = true
+}
+
