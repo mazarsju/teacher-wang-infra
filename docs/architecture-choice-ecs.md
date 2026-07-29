@@ -17,7 +17,7 @@ Related: [`architecture.md`](architecture.md) (what is provisioned), [`../README
 | Toggle | `enable_ecs` in `environments/prod/main.tf` (default `false`) |
 | Images | Same ECR repos (`backend`, `frontend`); build `linux/arm64` for Graviton |
 
-Task definitions, services, and ALB ingress are **follow-ups**; this decision locks the platform so we do not pay for Kubernetes until we need it.
+Task definitions, services, and ALB ingress: task defs/services are provisioned with `enable_ecs`; **ALB** is the remaining follow-up so traffic is not public until then.
 
 ## Context
 

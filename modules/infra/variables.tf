@@ -85,6 +85,78 @@ variable "ecs_instance_disk_size_gb" {
   default     = 30
 }
 
+variable "ecs_image_tag" {
+  description = "Image tag to deploy from ECR for both services"
+  type        = string
+  default     = "latest"
+}
+
+variable "ecs_backend_cpu" {
+  description = "CPU units for the backend task (1024 = 1 vCPU)"
+  type        = number
+  default     = 512
+}
+
+variable "ecs_backend_memory" {
+  description = "Memory (MiB) for the backend task"
+  type        = number
+  default     = 512
+}
+
+variable "ecs_frontend_cpu" {
+  description = "CPU units for the frontend task (1024 = 1 vCPU)"
+  type        = number
+  default     = 256
+}
+
+variable "ecs_frontend_memory" {
+  description = "Memory (MiB) for the frontend task"
+  type        = number
+  default     = 256
+}
+
+variable "ecs_backend_container_port" {
+  description = "Container port exposed by the backend image"
+  type        = number
+  default     = 5000
+}
+
+variable "ecs_backend_host_port" {
+  description = "Host port on the ECS instance mapped to the backend container"
+  type        = number
+  default     = 5000
+}
+
+variable "ecs_frontend_container_port" {
+  description = "Container port exposed by the frontend image"
+  type        = number
+  default     = 80
+}
+
+variable "ecs_frontend_host_port" {
+  description = "Host port on the ECS instance mapped to the frontend container"
+  type        = number
+  default     = 8080
+}
+
+variable "ecs_backend_desired_count" {
+  description = "Initial desired count for the backend ECS service"
+  type        = number
+  default     = 1
+}
+
+variable "ecs_frontend_desired_count" {
+  description = "Initial desired count for the frontend ECS service"
+  type        = number
+  default     = 1
+}
+
+variable "ecs_log_retention_days" {
+  description = "CloudWatch Logs retention for ECS task logs (shorter = cheaper)"
+  type        = number
+  default     = 7
+}
+
 variable "additional_tags" {
   description = "Extra tags merged onto taggable resources (on top of provider default_tags)"
   type        = map(string)

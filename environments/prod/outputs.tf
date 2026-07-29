@@ -163,3 +163,33 @@ output "ecs_autoscaling_group_name" {
   description = "Autoscaling group for ECS container instances (null when enable_ecs is false)"
   value       = module.infra.ecs_autoscaling_group_name
 }
+
+output "ecs_backend_service_name" {
+  description = "ECS backend service name (null when enable_ecs is false)"
+  value       = module.infra.ecs_backend_service_name
+}
+
+output "ecs_frontend_service_name" {
+  description = "ECS frontend service name (null when enable_ecs is false)"
+  value       = module.infra.ecs_frontend_service_name
+}
+
+output "ecs_backend_task_definition_arn" {
+  description = "Backend task definition ARN (null when enable_ecs is false)"
+  value       = module.infra.ecs_backend_task_definition_arn
+}
+
+output "ecs_frontend_task_definition_arn" {
+  description = "Frontend task definition ARN (null when enable_ecs is false)"
+  value       = module.infra.ecs_frontend_task_definition_arn
+}
+
+output "ecs_backend_log_group_name" {
+  description = "CloudWatch log group for backend tasks (null when enable_ecs is false)"
+  value       = module.infra.ecs_backend_log_group_name
+}
+
+output "ecs_frontend_log_group_name" {
+  description = "CloudWatch log group for frontend tasks (null when enable_ecs is false)"
+  value       = module.infra.ecs_frontend_log_group_name
+}

@@ -5,7 +5,7 @@
 # - Pay only for the EC2 Spot t4g.small (and EBS). Toggle enable_ecs off when idle.
 # - Instances sit in public subnets with a public IP so image pulls work without NAT.
 # - Container Insights disabled to avoid CloudWatch ingestion cost.
-# - Task definitions / services / ALB come later; this file is the compute foundation.
+# - Task definitions / services live in ecs_services.tf (same enable_ecs gate).
 
 data "aws_ssm_parameter" "ecs_ami" {
   count = var.enable_ecs ? 1 : 0

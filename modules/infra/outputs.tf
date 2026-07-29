@@ -168,3 +168,33 @@ output "ecs_autoscaling_group_name" {
   value       = try(aws_autoscaling_group.ecs[0].name, null)
 }
 
+output "ecs_backend_service_name" {
+  description = "ECS backend service name (null when enable_ecs is false)"
+  value       = try(aws_ecs_service.backend[0].name, null)
+}
+
+output "ecs_frontend_service_name" {
+  description = "ECS frontend service name (null when enable_ecs is false)"
+  value       = try(aws_ecs_service.frontend[0].name, null)
+}
+
+output "ecs_backend_task_definition_arn" {
+  description = "Backend task definition ARN (null when enable_ecs is false)"
+  value       = try(aws_ecs_task_definition.backend[0].arn, null)
+}
+
+output "ecs_frontend_task_definition_arn" {
+  description = "Frontend task definition ARN (null when enable_ecs is false)"
+  value       = try(aws_ecs_task_definition.frontend[0].arn, null)
+}
+
+output "ecs_backend_log_group_name" {
+  description = "CloudWatch log group for backend tasks (null when enable_ecs is false)"
+  value       = try(aws_cloudwatch_log_group.ecs_backend[0].name, null)
+}
+
+output "ecs_frontend_log_group_name" {
+  description = "CloudWatch log group for frontend tasks (null when enable_ecs is false)"
+  value       = try(aws_cloudwatch_log_group.ecs_frontend[0].name, null)
+}
+

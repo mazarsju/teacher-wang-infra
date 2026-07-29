@@ -43,6 +43,9 @@ Implemented in Terraform as `local.name_prefix = "${var.project_name}-${var.envi
 | ECS capacity provider | `teacher-wang-prod-ec2` |
 | ECS instance IAM role / profile | `teacher-wang-prod-ecs-instance` |
 | ECS task execution IAM role | `teacher-wang-prod-ecs-exec` |
+| ECS task IAM role | `teacher-wang-prod-ecs-task` |
+| ECS backend service / task family | `teacher-wang-prod-backend` |
+| ECS frontend service / task family | `teacher-wang-prod-frontend` |
 
 ### Exceptions
 

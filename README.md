@@ -45,14 +45,13 @@ Naming and tags: [`docs/tagging-and-naming.md`](docs/tagging-and-naming.md).
 - **Security groups** — baselines for ALB (80/443), app (from ALB), and DB (5432 from app)
 - **RDS** — PostgreSQL 16, `db.t4g.micro`, single-AZ, private subnets; master password in Secrets Manager
 - **ECR** — private repos for backend and frontend images (AES256, scan-on-push, lifecycle retention)
-- **ECS** — optional (`enable_ecs`); free control plane + Spot `t4g.small` capacity in public subnets (off by default)
+- **ECS** — optional (`enable_ecs`); free control plane + Spot `t4g.small` capacity; backend/frontend task definitions and services (off by default)
 
 **Planned**
 
-- **ECS task definitions / services** — run frontend and backend from ECR
 - **ALB** — HTTP(S) ingress to ECS services
 - **S3 / CloudFront** — static frontend hosting (if not served from ECS)
-- **IAM** — least-privilege roles for Terraform and workloads (instance + task execution roles exist when ECS is on)
+- **IAM** — least-privilege roles for Terraform and workloads (ECS instance / execution / task roles exist when ECS is on)
 - **Route 53** — DNS (when a public domain is configured)
 
 ## Repository structure
@@ -184,13 +183,22 @@ Prod defaults keep always-on paid pieces **off**:
 | `enable_nat_gateway` | `environments/prod/main.tf` | `false` | ~$32/mo + data |
 | `enable_ecs` | `environments/prod/main.tf` | `false` | ~$8–20/mo Spot `t4g.small` (ECS control plane is **free**) |
 
-ECS instances use public subnets + public IP, so **NAT is not required**. To bring capacity up:
+ECS instances use public subnets + public IP, so **NAT is not required**. Push **`linux/arm64`** images to ECR **before** (or immediately after) enabling services, or tasks will fail to pull.
 
 ```hcl
 enable_ecs = true
 ```
 
-Then `terraform apply`. Set `enable_ecs = false` and apply again to destroy instances and stop the compute bill.
+Then `terraform apply`. Set `enable_ecs = false` and apply again to destroy instances/services and stop the compute bill.
+
+When enabled, Terraform also creates:
+
+| Service | ECR image | Host port (on the instance) | Resources |
+| --- | --- | --- | --- |
+| `teacher-wang-prod-backend` | `…-backend:latest` | 5000 | 512 CPU / 512 MiB |
+| `teacher-wang-prod-frontend` | `…-frontend:latest` | 8080 | 256 CPU / 256 MiB |
+
+Backend receives `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` (from the RDS Secrets Manager secret). Traffic from the internet still waits on the **ALB** roadmap item (app SG only allows the ALB SG today).
 
 See [`docs/architecture-choice-ecs.md`](docs/architecture-choice-ecs.md) for why this is preferred over EKS.
 
@@ -221,7 +229,7 @@ Schema / migrations from the app’s SQLite models → Postgres live in **[teach
 
 - [x] ECR repositories for backend and frontend
 - [x] ECS cluster + EC2 Spot capacity (gated by `enable_ecs`, default off; no EKS)
-- [ ] ECS task definitions and services (frontend + backend)
+- [x] ECS task definitions and services (frontend + backend)
 - [ ] ALB ingress to ECS services
 
 ### 5. Application deployment

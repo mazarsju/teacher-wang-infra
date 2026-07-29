@@ -8,8 +8,8 @@ Platform decision (ECS vs EKS): [`architecture-choice-ecs.md`](architecture-choi
 ## Current state (networking + data + registry + optional ECS)
 
 Provisioned today: remote state, VPC, subnets, IGW, optional single NAT, route tables, security group baselines, RDS PostgreSQL (single-AZ, `db.t4g.micro`), and ECR repositories for backend/frontend images.
-ECS is **optional** via `enable_ecs` (default `false`) — control plane is free; cost is the Spot EC2 instance only.
-Not yet provisioned (shown dashed in the target view): ECS services/tasks, ALB, CloudFront.
+ECS is **optional** via `enable_ecs` (default `false`) — control plane is free; cost is the Spot EC2 instance only. When enabled, backend and frontend task definitions/services are created too.
+Not yet provisioned (shown dashed in the target view): ALB, CloudFront.
 
 ### High-level AWS account
 
@@ -128,8 +128,12 @@ Toggle in `environments/prod/main.tf`. See [`architecture-choice-ecs.md`](archit
 | Capacity | 1× Spot `t4g.small` (min 0, max 2) | Cheap ARM host; bin-pack both apps |
 | Subnets | Public + public IP | Pull from ECR without NAT |
 | Instance SG | `app` | Tasks/instances can reach RDS on 5432 |
+| Backend task | 512 CPU / 512 MiB, host port 5000 | Fits with frontend on one `t4g.small` |
+| Frontend task | 256 CPU / 256 MiB, host port 8080 | Static/nginx-style container |
+| Env / secrets | `DB_*` + `DB_PASSWORD` from Secrets Manager | Password not in Terraform state or task JSON plaintext |
+| Logs | `/ecs/.../backend` and `/frontend`, 7-day retention | Cap CloudWatch cost |
 | Insights | Disabled | Avoid CloudWatch ingestion cost |
-| Services / ALB | Not yet | Next roadmap items |
+| ALB | Not yet | Next roadmap item — services not public until then |
 
 ### Terraform remote state
 
@@ -226,6 +230,8 @@ Summary:
 | ECR (empty / light use) | Near-free | Storage + data transfer; lifecycle keeps image count low |
 | ECS control plane | **Free** | Why we chose ECS over EKS |
 | ECS Spot `t4g.small` | Paid (~$5–12/mo) when on | Toggle with `enable_ecs` (default off) |
+| ECS task logs (7-day retention) | Low | `/ecs/…/backend` and `/frontend` |
+| Public IPv4 on ECS instances | ~$3.6/mo each when associated | Public subnet placement (no NAT) |
 | EKS control plane | Avoided (~$73/mo) | See architecture-choice doc |
 | Per-AZ NAT | Avoided | Would multiply NAT cost; single NAT is enough for now |
 
