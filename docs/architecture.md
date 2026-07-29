@@ -156,6 +156,16 @@ flowchart LR
 
 Add `environments/staging` or `environments/dev` later by copying the `prod` root layout.
 
+## Naming and tagging
+
+See [`tagging-and-naming.md`](tagging-and-naming.md).
+
+Summary:
+
+- **Names:** `{project}-{environment}-{role}[-qualifier]` via `local.name_prefix` in `modules/infra`
+- **Required tags (provider default_tags):** `Project`, `Environment`, `ManagedBy`
+- **Resource tags:** `Name` (always), `Tier` (`public` / `private` / `data` / `shared`)
+
 ## Cost posture (current networking)
 
 | Component | Cost impact | Notes |
@@ -167,4 +177,5 @@ Add `environments/staging` or `environments/dev` later by copying the `prod` roo
 ## Related docs
 
 - [README.md](../README.md) — roadmap, getting started, tech choices
-- [agent.md](../agent.md) — agent rules (keep README + this file in sync)
+- [tagging-and-naming.md](tagging-and-naming.md) — Name pattern and required tags
+- [agent.md](../agent.md) — agent rules (keep README + docs in sync)

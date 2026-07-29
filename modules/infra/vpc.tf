@@ -25,9 +25,9 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags = {
-    Name = "${var.project_name}-${var.environment}-vpc"
-  }
+  tags = merge(local.resource_tags, {
+    Name = "${local.name_prefix}-vpc"
+  })
 }
 
 resource "aws_subnet" "public" {
@@ -38,10 +38,10 @@ resource "aws_subnet" "public" {
   availability_zone       = local.azs[count.index]
   map_public_ip_on_launch = false
 
-  tags = {
-    Name = "${var.project_name}-${var.environment}-public-${local.azs[count.index]}"
+  tags = merge(local.resource_tags, {
+    Name = "${local.name_prefix}-public-${local.azs[count.index]}"
     Tier = "public"
-  }
+  })
 }
 
 resource "aws_subnet" "private" {
@@ -51,18 +51,18 @@ resource "aws_subnet" "private" {
   cidr_block        = local.private_subnet_cidrs[count.index]
   availability_zone = local.azs[count.index]
 
-  tags = {
-    Name = "${var.project_name}-${var.environment}-private-${local.azs[count.index]}"
+  tags = merge(local.resource_tags, {
+    Name = "${local.name_prefix}-private-${local.azs[count.index]}"
     Tier = "private"
-  }
+  })
 }
 
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
-  tags = {
-    Name = "${var.project_name}-${var.environment}-igw"
-  }
+  tags = merge(local.resource_tags, {
+    Name = "${local.name_prefix}-igw"
+  })
 }
 
 # --- NAT (single gateway for cost; all private subnets share it) ---
@@ -72,9 +72,9 @@ resource "aws_eip" "nat" {
 
   domain = "vpc"
 
-  tags = {
-    Name = "${var.project_name}-${var.environment}-nat-eip"
-  }
+  tags = merge(local.resource_tags, {
+    Name = "${local.name_prefix}-nat-eip"
+  })
 
   depends_on = [aws_internet_gateway.main]
 }
@@ -85,9 +85,9 @@ resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat[0].id
   subnet_id     = aws_subnet.public[0].id
 
-  tags = {
-    Name = "${var.project_name}-${var.environment}-nat"
-  }
+  tags = merge(local.resource_tags, {
+    Name = "${local.name_prefix}-nat"
+  })
 
   depends_on = [aws_internet_gateway.main]
 }
@@ -97,10 +97,10 @@ resource "aws_nat_gateway" "main" {
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
-  tags = {
-    Name = "${var.project_name}-${var.environment}-public-rt"
+  tags = merge(local.resource_tags, {
+    Name = "${local.name_prefix}-public-rt"
     Tier = "public"
-  }
+  })
 }
 
 resource "aws_route" "public_internet" {
@@ -120,10 +120,10 @@ resource "aws_route_table_association" "public" {
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
 
-  tags = {
-    Name = "${var.project_name}-${var.environment}-private-rt"
+  tags = merge(local.resource_tags, {
+    Name = "${local.name_prefix}-private-rt"
     Tier = "private"
-  }
+  })
 }
 
 resource "aws_route" "private_nat" {

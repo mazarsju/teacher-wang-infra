@@ -15,6 +15,7 @@ The application is composed of:
 This repo provisions and wires those pieces together with **Terraform**.
 
 System shape (current + planned): [`docs/architecture.md`](docs/architecture.md).
+Naming and tags: [`docs/tagging-and-naming.md`](docs/tagging-and-naming.md).
 
 ## Technologies
 
@@ -62,9 +63,10 @@ teacher-wang-infra/
 ├── config.example           # Template for local AWS credentials
 ├── config                   # Your secrets (gitignored) — copy from config.example
 ├── docs/
-│   └── architecture.md      # System diagrams (current + planned)
+│   ├── architecture.md      # System diagrams (current + planned)
+│   └── tagging-and-naming.md # Resource Name pattern and required tags
 ├── modules/
-│   └── infra/               # Shared Terraform module (VPC, NAT, SGs, state bucket…)
+│   └── infra/               # Shared module: naming.tf, vpc, SGs, state, …
 └── environments/
     ├── common/              # Shared defaults module (project, region, AZ count)
     └── prod/                # Prod root — cd here and run terraform plan/apply
@@ -151,7 +153,7 @@ No `-var-file` flags needed: prod values live in `environments/prod/main.tf`; sh
 
 - [x] VPC, public/private subnets across AZs
 - [x] NAT, route tables, security group baselines (single NAT for cost; `enable_nat_gateway` to toggle)
-- [ ] Tagging and naming conventions
+- [x] Tagging and naming conventions (`docs/tagging-and-naming.md`, `local.name_prefix`)
 
 ### 3. Data layer
 

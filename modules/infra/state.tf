@@ -1,10 +1,16 @@
 locals {
+  # Account-scoped (shared across envs), not {project}-{env}-…
   tfstate_bucket_name = "${var.project_name}-tfstate-${data.aws_caller_identity.current.account_id}"
 }
 
 # Remote state store + native S3 lock files (Terraform >= 1.10, use_lockfile).
 resource "aws_s3_bucket" "terraform_state" {
   bucket = local.tfstate_bucket_name
+
+  tags = merge(local.resource_tags, {
+    Name = "${var.project_name}-tfstate"
+    Tier = "shared"
+  })
 
   lifecycle {
     prevent_destroy = true

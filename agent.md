@@ -13,7 +13,9 @@ In particular, keep these README sections accurate:
 
 Also update [`docs/architecture.md`](docs/architecture.md) whenever components are **added, removed, or rewired** (VPC layout, routing, security groups, compute, data, edge, secrets, CI). Keep Mermaid diagrams and the “current vs planned” sections accurate so the visual model matches what Terraform actually manages.
 
-`README.md` is the primary source of truth for status and workflow; `docs/architecture.md` is the primary source of truth for system shape.
+When adding or renaming AWS resources, follow [`docs/tagging-and-naming.md`](docs/tagging-and-naming.md) (`{project}-{environment}-{role}`, required tags, `Tier`). Update that doc if you introduce a new naming pattern or required tag key.
+
+`README.md` is the primary source of truth for status and workflow; `docs/architecture.md` is the primary source of truth for system shape; `docs/tagging-and-naming.md` is the primary source of truth for resource names and tags.
 
 ## Minimize AWS cost
 

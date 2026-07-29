@@ -2,16 +2,17 @@
 # Rules stay minimal; tighten further when EKS/RDS are introduced.
 #
 # Cost: security groups are free.
+# Naming: AWS `name` and Name tag use the same value ({name_prefix}-{role}).
 
 resource "aws_security_group" "alb" {
-  name        = "${var.project_name}-${var.environment}-alb"
+  name        = "${local.name_prefix}-alb"
   description = "Baseline for public Application Load Balancer"
   vpc_id      = aws_vpc.main.id
 
-  tags = {
-    Name = "${var.project_name}-${var.environment}-alb-sg"
+  tags = merge(local.resource_tags, {
+    Name = "${local.name_prefix}-alb"
     Tier = "public"
-  }
+  })
 }
 
 resource "aws_vpc_security_group_ingress_rule" "alb_http" {
@@ -40,14 +41,14 @@ resource "aws_vpc_security_group_egress_rule" "alb_all" {
 }
 
 resource "aws_security_group" "app" {
-  name        = "${var.project_name}-${var.environment}-app"
+  name        = "${local.name_prefix}-app"
   description = "Baseline for private application workloads (EKS nodes / pods)"
   vpc_id      = aws_vpc.main.id
 
-  tags = {
-    Name = "${var.project_name}-${var.environment}-app-sg"
+  tags = merge(local.resource_tags, {
+    Name = "${local.name_prefix}-app"
     Tier = "private"
-  }
+  })
 }
 
 # Allow ALB health checks and HTTP traffic into the app tier.
@@ -69,14 +70,14 @@ resource "aws_vpc_security_group_egress_rule" "app_all" {
 }
 
 resource "aws_security_group" "db" {
-  name        = "${var.project_name}-${var.environment}-db"
+  name        = "${local.name_prefix}-db"
   description = "Baseline for RDS PostgreSQL (app tier only)"
   vpc_id      = aws_vpc.main.id
 
-  tags = {
-    Name = "${var.project_name}-${var.environment}-db-sg"
+  tags = merge(local.resource_tags, {
+    Name = "${local.name_prefix}-db"
     Tier = "data"
-  }
+  })
 }
 
 resource "aws_vpc_security_group_ingress_rule" "db_postgres_from_app" {
