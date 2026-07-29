@@ -78,3 +78,38 @@ output "db_security_group_id" {
   value       = aws_security_group.db.id
 }
 
+output "db_instance_id" {
+  description = "RDS instance identifier"
+  value       = aws_db_instance.main.id
+}
+
+output "db_instance_arn" {
+  description = "RDS instance ARN"
+  value       = aws_db_instance.main.arn
+}
+
+output "db_endpoint" {
+  description = "RDS connection endpoint (host:port)"
+  value       = aws_db_instance.main.endpoint
+}
+
+output "db_address" {
+  description = "RDS hostname"
+  value       = aws_db_instance.main.address
+}
+
+output "db_port" {
+  description = "RDS port"
+  value       = aws_db_instance.main.port
+}
+
+output "db_name" {
+  description = "Initial PostgreSQL database name"
+  value       = aws_db_instance.main.db_name
+}
+
+output "db_master_user_secret_arn" {
+  description = "Secrets Manager ARN for the RDS-managed master password"
+  value       = try(aws_db_instance.main.master_user_secret[0].secret_arn, null)
+}
+

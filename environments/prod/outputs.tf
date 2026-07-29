@@ -77,3 +77,34 @@ output "db_security_group_id" {
   description = "Baseline security group for RDS PostgreSQL"
   value       = module.infra.db_security_group_id
 }
+
+output "db_instance_id" {
+  description = "RDS instance identifier"
+  value       = module.infra.db_instance_id
+}
+
+output "db_endpoint" {
+  description = "RDS connection endpoint (host:port)"
+  value       = module.infra.db_endpoint
+}
+
+output "db_address" {
+  description = "RDS hostname"
+  value       = module.infra.db_address
+}
+
+output "db_port" {
+  description = "RDS port"
+  value       = module.infra.db_port
+}
+
+output "db_name" {
+  description = "Initial PostgreSQL database name"
+  value       = module.infra.db_name
+}
+
+output "db_master_user_secret_arn" {
+  description = "Secrets Manager ARN for the RDS-managed master password"
+  value       = module.infra.db_master_user_secret_arn
+  sensitive   = true
+}

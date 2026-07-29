@@ -3,10 +3,10 @@
 Living overview of the AWS layout provisioned by this repository.
 Update this file whenever components are added, removed, or rewired.
 
-## Current state (networking foundation)
+## Current state (networking + data)
 
-Provisioned today: remote state, VPC, subnets, IGW, single NAT, route tables, and security group baselines.
-Not yet provisioned (shown dashed in the target view): EKS, ECR, RDS, ALB, CloudFront.
+Provisioned today: remote state, VPC, subnets, IGW, optional single NAT, route tables, security group baselines, and RDS PostgreSQL (single-AZ, `db.t4g.micro`).
+Not yet provisioned (shown dashed in the target view): EKS, ECR, ALB, CloudFront.
 
 ### High-level AWS account
 
@@ -47,10 +47,11 @@ flowchart TB
     subgraph Private["Private subnets"]
       PrivA["private AZ-a<br/>10.0.8.0/20"]
       PrivB["private AZ-b<br/>10.0.9.0/20"]
+      RDS["RDS PostgreSQL<br/>db.t4g.micro · single-AZ · SG db"]
     end
 
     RTPub["Public route table<br/>0.0.0.0/0 → IGW"]
-    RTPriv["Private route table<br/>0.0.0.0/0 → NAT"]
+    RTPriv["Private route table<br/>0.0.0.0/0 → NAT (optional)"]
   end
 
   Internet <--> IGW
@@ -61,6 +62,8 @@ flowchart TB
   NAT --- RTPriv
   RTPriv --- PrivA
   RTPriv --- PrivB
+  PrivA --- RDS
+  PrivB --- RDS
   NAT --> IGW
 ```
 
@@ -75,17 +78,30 @@ flowchart LR
   SGALB["SG: alb<br/>ingress 80, 443 from 0.0.0.0/0"]
   SGApp["SG: app<br/>ingress TCP from alb SG"]
   SGDb["SG: db<br/>ingress 5432 from app SG"]
+  RDS[(RDS PostgreSQL)]
 
   Users -->|HTTP/HTTPS| SGALB
   SGALB -->|future ALB → targets| SGApp
-  SGApp -->|future RDS| SGDb
+  SGApp --> SGDb
+  SGDb --> RDS
 ```
 
 | Security group | Purpose | Ingress | Egress |
 | --- | --- | --- | --- |
 | `alb` | Future public ALB | TCP 80, 443 from internet | all |
 | `app` | Future EKS / app workloads | TCP 1–65535 from `alb` | all (NAT for pulls / AWS APIs) |
-| `db` | Future RDS PostgreSQL | TCP 5432 from `app` | none defined |
+| `db` | RDS PostgreSQL | TCP 5432 from `app` | none defined |
+
+### RDS PostgreSQL
+
+| Setting | Value | Rationale |
+| --- | --- | --- |
+| Class | `db.t4g.micro` | Lowest-cost burstable (ARM) |
+| Multi-AZ | off | Avoid ~2× instance cost until HA is required |
+| Storage | 20 GiB gp3, encrypted | Free-tier–friendly baseline |
+| Network | Private subnets, not public | Only reachable via app SG |
+| Password | RDS-managed Secrets Manager secret | No password in Terraform state |
+| Backups | 1-day retention | Free-tier account limit; raise when upgrading the account plan |
 
 ### Terraform remote state
 
@@ -117,20 +133,21 @@ flowchart TB
 
     subgraph Private["Private subnets"]
       EKS["EKS + node group — planned<br/>SG app"]
-      RDS["RDS PostgreSQL — planned<br/>SG db"]
+      RDS["RDS PostgreSQL<br/>SG db"]
     end
 
-    NAT["Single NAT Gateway"]
+    NAT["Single NAT Gateway (optional)"]
   end
 
   ECR["ECR — planned"]
-  SM["Secrets Manager / SSM — planned"]
+  SM["Secrets Manager<br/>(RDS master password today)"]
 
   ALB --> EKS
   EKS --> RDS
   EKS --> NAT
   EKS -.-> ECR
   EKS -.-> SM
+  RDS -.-> SM
   CF -.->|API calls| ALB
 ```
 
@@ -140,7 +157,7 @@ Each environment directory is a **Terraform root**. Shared resources live in `mo
 
 | Path | Role |
 | --- | --- |
-| `modules/infra` | VPC, NAT, route tables, security groups, state bucket |
+| `modules/infra` | VPC, NAT, route tables, security groups, state bucket, RDS |
 | `environments/common` | Shared defaults module (`project_name`, `aws_region`, `az_count`) |
 | `environments/prod` | Prod root — `cd environments/prod && terraform plan` |
 
@@ -172,6 +189,8 @@ Summary:
 | --- | --- | --- |
 | VPC, subnets, route tables, SGs, IGW | Free | — |
 | Single NAT Gateway + EIP | Paid (~$32/mo + data) | Toggle with `enable_nat_gateway` |
+| RDS `db.t4g.micro` single-AZ | Paid (~$12–15/mo + storage) | No Multi-AZ / PI / enhanced monitoring |
+| RDS-managed Secrets Manager secret | Paid (~$0.40/mo) | Master password |
 | Per-AZ NAT | Avoided | Would multiply NAT cost; single NAT is enough for now |
 
 ## Related docs

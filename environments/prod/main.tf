@@ -3,7 +3,7 @@ locals {
 
   # Prod-specific overrides (shared defaults come from module.common).
   vpc_cidr           = "10.0.0.0/16"
-  enable_nat_gateway = true
+  enable_nat_gateway = false
 }
 
 module "common" {

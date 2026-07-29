@@ -27,9 +27,9 @@ Naming and tags: [`docs/tagging-and-naming.md`](docs/tagging-and-naming.md).
 | Orchestration | Kubernetes on **Amazon EKS** |
 | Containers | **Amazon ECR** (image registry) |
 | Networking | VPC, IGW, single NAT, route tables, security groups, ALB/NLB (planned) |
-| Database | **Amazon RDS** (PostgreSQL planned; replaces local SQLite for SaaS) |
+| Database | **Amazon RDS** PostgreSQL (`db.t4g.micro`, single-AZ) |
 | Frontend delivery | S3 + CloudFront and/or ingress on EKS (TBD) |
-| Secrets (later) | AWS Secrets Manager / SSM Parameter Store, IAM roles, OIDC for CI |
+| Secrets (now) | RDS master password in **Secrets Manager** (RDS-managed); broader secrets later |
 | Credentials (now) | Local gitignored `config` file — temporary |
 | Cost posture | Cheapest viable defaults (see `agent.md`) |
 
@@ -42,12 +42,12 @@ Naming and tags: [`docs/tagging-and-naming.md`](docs/tagging-and-naming.md).
 - **Internet Gateway** — public subnet default route to the internet
 - **NAT Gateway** — single shared NAT in one public subnet for private outbound (toggle with `enable_nat_gateway`)
 - **Security groups** — baselines for ALB (80/443), app (from ALB), and DB (5432 from app)
+- **RDS** — PostgreSQL 16, `db.t4g.micro`, single-AZ, private subnets; master password in Secrets Manager
 
 **Planned**
 
 - **EKS** — run the Flask API (and optionally the frontend) as containers
 - **ECR** — store backend/frontend container images
-- **RDS** — managed PostgreSQL for the knowledge base and app data
 - **ALB** — HTTP(S) ingress to Kubernetes services
 - **S3 / CloudFront** — static frontend hosting (if not served from the cluster)
 - **IAM** — least-privilege roles for Terraform, nodes, and workloads
@@ -66,7 +66,7 @@ teacher-wang-infra/
 │   ├── architecture.md      # System diagrams (current + planned)
 │   └── tagging-and-naming.md # Resource Name pattern and required tags
 ├── modules/
-│   └── infra/               # Shared module: naming.tf, vpc, SGs, state, …
+│   └── infra/               # Shared module: naming, vpc, SGs, state, rds, …
 └── environments/
     ├── common/              # Shared defaults module (project, region, AZ count)
     └── prod/                # Prod root — cd here and run terraform plan/apply
@@ -157,9 +157,9 @@ No `-var-file` flags needed: prod values live in `environments/prod/main.tf`; sh
 
 ### 3. Data layer
 
-- [ ] RDS PostgreSQL (dev sizing first)
+- [x] RDS PostgreSQL (cheap sizing: `db.t4g.micro`, single-AZ, private, Secrets Manager password)
 - [ ] Migrations path from SQLite schema used in the app
-- [ ] Backup / retention policy
+- [ ] Backup / retention policy (currently 1-day automated backups — free-tier max)
 
 ### 4. Container platform
 
