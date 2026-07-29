@@ -46,12 +46,13 @@ Naming and tags: [`docs/tagging-and-naming.md`](docs/tagging-and-naming.md).
 - **RDS** — PostgreSQL 16, `db.t4g.micro`, single-AZ, private subnets; master password in Secrets Manager
 - **ECR** — private repos for backend and frontend images (AES256, scan-on-push, lifecycle retention)
 - **ECS** — optional (`enable_ecs`); free control plane + Spot `t4g.small` capacity; backend/frontend task definitions and services (off by default)
+- **ALB** — optional with ECS; internet-facing HTTP → frontend only (backend stays off the ALB)
 
 **Planned**
 
-- **ALB** — HTTP(S) ingress to ECS services
 - **S3 / CloudFront** — static frontend hosting (if not served from ECS)
 - **IAM** — least-privilege roles for Terraform and workloads (ECS instance / execution / task roles exist when ECS is on)
+- **TLS / ACM** — HTTPS listener on the ALB
 - **Route 53** — DNS (when a public domain is configured)
 
 ## Repository structure
@@ -68,7 +69,7 @@ teacher-wang-infra/
 │   ├── architecture-choice-ecs.md   # Why ECS instead of EKS
 │   └── tagging-and-naming.md        # Resource Name pattern and required tags
 ├── modules/
-│   └── infra/               # Shared module: naming, vpc, SGs, state, rds, ecr, ecs, …
+│   └── infra/               # Shared module: naming, vpc, SGs, state, rds, ecr, ecs, alb, …
 └── environments/
     ├── common/              # Shared defaults module (project, region, AZ count)
     └── prod/                # Prod root — cd here and run terraform plan/apply
@@ -181,7 +182,7 @@ Prod defaults keep always-on paid pieces **off**:
 | Flag | File | Default | Approx. cost when on |
 | --- | --- | --- | --- |
 | `enable_nat_gateway` | `environments/prod/main.tf` | `false` | ~$32/mo + data |
-| `enable_ecs` | `environments/prod/main.tf` | `false` | ~$8–20/mo Spot `t4g.small` (ECS control plane is **free**) |
+| `enable_ecs` | `environments/prod/main.tf` | `false` | ~$8–20/mo Spot `t4g.small` + **~$16/mo ALB** (ECS control plane is **free**) |
 
 ECS instances use public subnets + public IP, so **NAT is not required**. Push **`linux/arm64`** images to ECR **before** (or immediately after) enabling services, or tasks will fail to pull.
 
@@ -189,16 +190,17 @@ ECS instances use public subnets + public IP, so **NAT is not required**. Push *
 enable_ecs = true
 ```
 
-Then `terraform apply`. Set `enable_ecs = false` and apply again to destroy instances/services and stop the compute bill.
+Then `terraform apply`. Set `enable_ecs = false` and apply again to destroy instances/services/**ALB** and stop those bills.
 
 When enabled, Terraform also creates:
 
-| Service | ECR image | Host port (on the instance) | Resources |
+| Service | Exposure | Host port | Resources |
 | --- | --- | --- | --- |
-| `teacher-wang-prod-backend` | `…-backend:latest` | 5000 | 512 CPU / 512 MiB |
-| `teacher-wang-prod-frontend` | `…-frontend:latest` | 8080 | 256 CPU / 256 MiB |
+| Frontend | **Public** via ALB `:80` → target group | 8080 | 256 CPU / 256 MiB |
+| Backend | **VPC-local only** (not on the ALB) | 5000 | 512 CPU / 512 MiB |
 
-Backend receives `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` (from the RDS Secrets Manager secret). Traffic from the internet still waits on the **ALB** roadmap item (app SG only allows the ALB SG today).
+- Frontend URL: `http://$(terraform output -raw alb_dns_name)`
+- Backend receives `DB_*` / `DB_PASSWORD`; frontend receives `BACKEND_UPSTREAM` (`http://172.17.0.1:5000`) for a same-host reverse proxy (browser must not call the API directly).
 
 See [`docs/architecture-choice-ecs.md`](docs/architecture-choice-ecs.md) for why this is preferred over EKS.
 
@@ -230,12 +232,12 @@ Schema / migrations from the app’s SQLite models → Postgres live in **[teach
 - [x] ECR repositories for backend and frontend
 - [x] ECS cluster + EC2 Spot capacity (gated by `enable_ecs`, default off; no EKS)
 - [x] ECS task definitions and services (frontend + backend)
-- [ ] ALB ingress to ECS services
+- [x] ALB ingress (public frontend only; backend VPC-local)
 
 ### 5. Application deployment
 
-- [ ] Wire backend ↔ RDS (secret ARN / connection URL) and frontend ↔ backend URLs / CORS
-- [ ] Frontend hosting (ECS and/or S3+CloudFront)
+- [ ] Wire backend ↔ RDS (secret ARN / connection URL) and frontend ↔ backend proxy / CORS
+- [ ] Frontend hosting extras (S3+CloudFront if leaving ECS)
 - [ ] Health checks and basic observability (CloudWatch)
 
 ### 6. Secrets & CI/CD

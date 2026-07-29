@@ -193,3 +193,23 @@ output "ecs_frontend_log_group_name" {
   description = "CloudWatch log group for frontend tasks (null when enable_ecs is false)"
   value       = module.infra.ecs_frontend_log_group_name
 }
+
+output "alb_arn" {
+  description = "Public ALB ARN (null when enable_ecs is false)"
+  value       = module.infra.alb_arn
+}
+
+output "alb_dns_name" {
+  description = "Public ALB DNS name for the frontend (null when enable_ecs is false)"
+  value       = module.infra.alb_dns_name
+}
+
+output "alb_zone_id" {
+  description = "Public ALB Route 53 zone ID (null when enable_ecs is false)"
+  value       = module.infra.alb_zone_id
+}
+
+output "alb_frontend_target_group_arn" {
+  description = "Frontend target group ARN (null when enable_ecs is false)"
+  value       = module.infra.alb_frontend_target_group_arn
+}

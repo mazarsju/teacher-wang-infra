@@ -157,6 +157,12 @@ variable "ecs_log_retention_days" {
   default     = 7
 }
 
+variable "alb_frontend_health_check_path" {
+  description = "HTTP health check path for the frontend target group"
+  type        = string
+  default     = "/"
+}
+
 variable "additional_tags" {
   description = "Extra tags merged onto taggable resources (on top of provider default_tags)"
   type        = map(string)

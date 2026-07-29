@@ -1,0 +1,78 @@
+# Application Load Balancer — public ingress to the frontend only.
+#
+# Cost notes:
+# - ALB ~$16/mo + LCU charges whenever enable_ecs is true (destroyed with ECS).
+# - No access logs / WAF yet (extra cost).
+# - HTTP only until ACM/TLS is on the roadmap; HTTPS SG rule reserved for later.
+#
+# Security model:
+# - Internet → ALB → frontend target group (host port).
+# - Backend is NOT registered on the ALB (VPC / same-host only).
+
+resource "aws_lb" "app" {
+  count = var.enable_ecs ? 1 : 0
+
+  name               = "${local.name_prefix}-alb"
+  load_balancer_type = "application"
+  internal           = false
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = aws_subnet.public[*].id
+
+  enable_deletion_protection = false
+  idle_timeout               = 60
+
+  tags = merge(local.resource_tags, {
+    Name = "${local.name_prefix}-alb"
+    Tier = "public"
+  })
+}
+
+resource "aws_lb_target_group" "frontend" {
+  count = var.enable_ecs ? 1 : 0
+
+  name        = "${local.name_prefix}-frontend"
+  port        = var.ecs_frontend_host_port
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "instance"
+
+  health_check {
+    enabled             = true
+    path                = var.alb_frontend_health_check_path
+    protocol            = "HTTP"
+    matcher             = "200-399"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+  }
+
+  deregistration_delay = 30
+
+  tags = merge(local.resource_tags, {
+    Name = "${local.name_prefix}-frontend"
+    Tier = "public"
+  })
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_lb_listener" "http" {
+  count = var.enable_ecs ? 1 : 0
+
+  load_balancer_arn = aws_lb.app[0].arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.frontend[0].arn
+  }
+
+  tags = merge(local.resource_tags, {
+    Name = "${local.name_prefix}-alb-http"
+    Tier = "public"
+  })
+}

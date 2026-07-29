@@ -14,10 +14,11 @@ Related: [`architecture.md`](architecture.md) (what is provisioned), [`../README
 | Compute | **EC2** launch type, capacity provider on an ASG |
 | Instance | `t4g.small` Spot (ARM), one instance for both apps |
 | Placement | Public subnets + public IP (no NAT required) |
+| Ingress | Public ALB → **frontend only**; backend VPC-local (`BACKEND_UPSTREAM`) |
 | Toggle | `enable_ecs` in `environments/prod/main.tf` (default `false`) |
 | Images | Same ECR repos (`backend`, `frontend`); build `linux/arm64` for Graviton |
 
-Task definitions, services, and ALB ingress: task defs/services are provisioned with `enable_ecs`; **ALB** is the remaining follow-up so traffic is not public until then.
+Task definitions, services, and the public ALB are provisioned together with `enable_ecs`. The backend is intentionally **not** exposed on the ALB.
 
 ## Context
 
@@ -60,7 +61,7 @@ EKS remains a valid **later** choice for multi-service platforms or strong Kuber
 ```mermaid
 flowchart TB
   Users((Users))
-  ALB["ALB — planned"]
+  ALB["Public ALB :80"]
   CF["CloudFront + S3 — optional for SPA"]
 
   Users --> ALB
@@ -68,7 +69,8 @@ flowchart TB
 
   subgraph VPC["VPC"]
     subgraph Public["Public subnets"]
-      ECS["ECS cluster<br/>1× t4g.small Spot<br/>frontend + backend tasks"]
+      FE["Frontend task<br/>ALB target"]
+      BE["Backend task<br/>VPC-local only"]
     end
     subgraph Private["Private subnets"]
       RDS[(RDS PostgreSQL)]
@@ -78,11 +80,13 @@ flowchart TB
   ECR["ECR backend · frontend"]
   SM["Secrets Manager"]
 
-  ALB --> ECS
-  ECS --> RDS
-  ECS --> ECR
-  ECS -.-> SM
-  CF -.->|API| ALB
+  ALB -->|frontend only| FE
+  FE -.->|BACKEND_UPSTREAM| BE
+  BE --> RDS
+  FE --> ECR
+  BE --> ECR
+  BE -.-> SM
+  CF -.->|optional| ALB
 ```
 
 ## How to enable / disable

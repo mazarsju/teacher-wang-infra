@@ -8,8 +8,8 @@ Platform decision (ECS vs EKS): [`architecture-choice-ecs.md`](architecture-choi
 ## Current state (networking + data + registry + optional ECS)
 
 Provisioned today: remote state, VPC, subnets, IGW, optional single NAT, route tables, security group baselines, RDS PostgreSQL (single-AZ, `db.t4g.micro`), and ECR repositories for backend/frontend images.
-ECS is **optional** via `enable_ecs` (default `false`) — control plane is free; cost is the Spot EC2 instance only. When enabled, backend and frontend task definitions/services are created too.
-Not yet provisioned (shown dashed in the target view): ALB, CloudFront.
+ECS is **optional** via `enable_ecs` (default `false`) — control plane is free; cost is the Spot EC2 instance + ALB. When enabled, backend/frontend services and a **public ALB (frontend only)** are created too.
+Not yet provisioned (shown dashed in the target view): CloudFront, Route 53, TLS.
 
 ### High-level AWS account
 
@@ -81,20 +81,21 @@ flowchart LR
   Users((Users / Internet))
 
   SGALB["SG: alb<br/>ingress 80, 443 from 0.0.0.0/0"]
-  SGApp["SG: app<br/>ingress TCP from alb SG"]
+  SGApp["SG: app"]
   SGDb["SG: db<br/>ingress 5432 from app SG"]
   RDS[(RDS PostgreSQL)]
 
-  Users -->|HTTP/HTTPS| SGALB
-  SGALB -->|future ALB → targets| SGApp
+  Users -->|HTTP| SGALB
+  SGALB -->|frontend host port only| SGApp
+  SGApp -->|backend host port<br/>VPC-local| SGApp
   SGApp --> SGDb
   SGDb --> RDS
 ```
 
 | Security group | Purpose | Ingress | Egress |
 | --- | --- | --- | --- |
-| `alb` | Future public ALB | TCP 80, 443 from internet | all |
-| `app` | ECS instances / tasks | TCP 1–65535 from `alb` | all (ECR / AWS APIs via public IP or NAT) |
+| `alb` | Public ALB | TCP 80, 443 from internet | all |
+| `app` | ECS instances / tasks | Frontend host port from `alb`; backend host port from `app` (VPC-local) | all |
 | `db` | RDS PostgreSQL | TCP 5432 from `app` | none defined |
 
 ### RDS PostgreSQL
@@ -133,7 +134,16 @@ Toggle in `environments/prod/main.tf`. See [`architecture-choice-ecs.md`](archit
 | Env / secrets | `DB_*` + `DB_PASSWORD` from Secrets Manager | Password not in Terraform state or task JSON plaintext |
 | Logs | `/ecs/.../backend` and `/frontend`, 7-day retention | Cap CloudWatch cost |
 | Insights | Disabled | Avoid CloudWatch ingestion cost |
-| ALB | Not yet | Next roadmap item — services not public until then |
+
+### ALB (with `enable_ecs`)
+
+| Setting | Value | Rationale |
+| --- | --- | --- |
+| Scheme | Internet-facing | Public web UI only |
+| Listener | HTTP `:80` → frontend TG | TLS/ACM later |
+| Frontend TG | Instance targets, host port 8080 | Bridge-mode ECS |
+| Backend | Not registered on ALB | API stays VPC-local; frontend should reverse-proxy via `BACKEND_UPSTREAM` |
+| Access logs | Off | Avoid S3 log storage cost |
 
 ### Terraform remote state
 
@@ -147,24 +157,27 @@ flowchart LR
 
 ## Target architecture (planned)
 
-Shows how upcoming roadmap pieces attach to the network already in place.
+Shows how upcoming pieces attach to what is already in place.
 
 ```mermaid
 flowchart TB
   Users((Users))
 
-  CF["CloudFront + S3<br/>(frontend — planned)"]
+  CF["CloudFront + S3<br/>(frontend — optional later)"]
   R53["Route 53 — planned"]
 
   Users --> R53
-  R53 --> CF
+  R53 --> ALB
   Users --> ALB
+  Users -.-> CF
 
   subgraph VPC["VPC"]
-    ALB["ALB — planned<br/>public subnets · SG alb"]
+    ALB["ALB · public<br/>SG alb · HTTP :80"]
 
     subgraph Public["Public subnets"]
-      ECS["ECS cluster + Spot EC2<br/>toggle: enable_ecs<br/>SG app"]
+      FE["ECS frontend<br/>public via ALB"]
+      BE["ECS backend<br/>VPC-local only"]
+      ECS["Spot EC2 capacity<br/>toggle: enable_ecs"]
     end
 
     subgraph Private["Private subnets"]
@@ -177,15 +190,18 @@ flowchart TB
   ECR["ECR<br/>backend · frontend"]
   SM["Secrets Manager<br/>(RDS master password today)"]
 
-  ALB --> ECS
-  ECS --> RDS
+  ALB -->|frontend only| FE
+  FE -.->|BACKEND_UPSTREAM| BE
+  BE --> RDS
+  FE --> ECS
+  BE --> ECS
   ECS --> ECR
-  ECS -.-> SM
+  BE -.-> SM
   RDS -.-> SM
-  CF -.->|API calls| ALB
+  CF -.->|optional| ALB
 ```
 
-ECS and NAT are off by default (`enable_ecs` / `enable_nat_gateway` = `false` in prod).
+ECS + ALB are created together when `enable_ecs = true` (default off).
 
 ## Environments
 
@@ -193,7 +209,7 @@ Each environment directory is a **Terraform root**. Shared resources live in `mo
 
 | Path | Role |
 | --- | --- |
-| `modules/infra` | VPC, NAT, route tables, security groups, state bucket, RDS, ECR, optional ECS |
+| `modules/infra` | VPC, NAT, route tables, security groups, state bucket, RDS, ECR, optional ECS + ALB |
 | `environments/common` | Shared defaults module (`project_name`, `aws_region`, `az_count`) |
 | `environments/prod` | Prod root — `cd environments/prod && terraform plan` |
 
@@ -230,6 +246,7 @@ Summary:
 | ECR (empty / light use) | Near-free | Storage + data transfer; lifecycle keeps image count low |
 | ECS control plane | **Free** | Why we chose ECS over EKS |
 | ECS Spot `t4g.small` | Paid (~$5–12/mo) when on | Toggle with `enable_ecs` (default off) |
+| ALB (with ECS) | Paid (~$16/mo + LCU) when on | Public frontend only; destroyed with `enable_ecs` |
 | ECS task logs (7-day retention) | Low | `/ecs/…/backend` and `/frontend` |
 | Public IPv4 on ECS instances | ~$3.6/mo each when associated | Public subnet placement (no NAT) |
 | EKS control plane | Avoided (~$73/mo) | See architecture-choice doc |

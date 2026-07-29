@@ -198,3 +198,23 @@ output "ecs_frontend_log_group_name" {
   value       = try(aws_cloudwatch_log_group.ecs_frontend[0].name, null)
 }
 
+output "alb_arn" {
+  description = "Public ALB ARN (null when enable_ecs is false)"
+  value       = try(aws_lb.app[0].arn, null)
+}
+
+output "alb_dns_name" {
+  description = "Public ALB DNS name for the frontend (null when enable_ecs is false)"
+  value       = try(aws_lb.app[0].dns_name, null)
+}
+
+output "alb_zone_id" {
+  description = "Public ALB Route 53 zone ID (null when enable_ecs is false)"
+  value       = try(aws_lb.app[0].zone_id, null)
+}
+
+output "alb_frontend_target_group_arn" {
+  description = "Frontend target group ARN (null when enable_ecs is false)"
+  value       = try(aws_lb_target_group.frontend[0].arn, null)
+}
+

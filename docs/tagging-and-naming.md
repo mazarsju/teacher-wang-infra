@@ -46,6 +46,8 @@ Implemented in Terraform as `local.name_prefix = "${var.project_name}-${var.envi
 | ECS task IAM role | `teacher-wang-prod-ecs-task` |
 | ECS backend service / task family | `teacher-wang-prod-backend` |
 | ECS frontend service / task family | `teacher-wang-prod-frontend` |
+| ALB | `teacher-wang-prod-alb` |
+| ALB frontend target group | `teacher-wang-prod-frontend` |
 
 ### Exceptions
 
@@ -95,11 +97,9 @@ Extra tags can be passed into the infra module via `additional_tags` and are mer
 - Individual security group **rules** — they inherit `default_tags`; no custom `Name` needed.
 - Route table **associations** and plain **routes** — not useful in the console.
 
-## Future (ALB)
+## Future (TLS / DNS)
 
-When adding load balancers in front of ECS, tag public subnets for discovery if using an AWS Load Balancer Controller–style workflow, or rely on explicit Terraform subnet IDs (preferred for this repo’s small footprint).
-
-Those conventions are additive and must not replace the tags above.
+When adding HTTPS, attach an ACM certificate to an ALB `:443` listener (HTTP can redirect). Prefer explicit Terraform subnet IDs for the ALB over controller-style subnet tags.
 
 ## Checklist for new resources
 

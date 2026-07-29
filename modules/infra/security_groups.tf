@@ -1,12 +1,16 @@
-# Security group baselines for future ALB → app → DB traffic.
-# Rules stay minimal; tighten further when ECS services / ALB are introduced.
+# Security group baselines for ALB → app → DB traffic.
 #
 # Cost: security groups are free.
 # Naming: AWS `name` and Name tag use the same value ({name_prefix}-{role}).
+#
+# Ingress model:
+# - ALB: 80/443 from the internet
+# - App: frontend host port from ALB only; backend host port from the app SG (VPC-local)
+# - DB: 5432 from app SG
 
 resource "aws_security_group" "alb" {
   name        = "${local.name_prefix}-alb"
-  description = "Baseline for public Application Load Balancer"
+  description = "Public Application Load Balancer"
   vpc_id      = aws_vpc.main.id
 
   tags = merge(local.resource_tags, {
@@ -26,7 +30,7 @@ resource "aws_vpc_security_group_ingress_rule" "alb_http" {
 
 resource "aws_vpc_security_group_ingress_rule" "alb_https" {
   security_group_id = aws_security_group.alb.id
-  description       = "HTTPS from internet"
+  description       = "HTTPS from internet (reserved for future ACM listener)"
   ip_protocol       = "tcp"
   from_port         = 443
   to_port           = 443
@@ -42,7 +46,7 @@ resource "aws_vpc_security_group_egress_rule" "alb_all" {
 
 resource "aws_security_group" "app" {
   name        = "${local.name_prefix}-app"
-  description = "Baseline for application workloads (ECS instances / tasks)"
+  description = "Application workloads (ECS instances / tasks)"
   vpc_id      = aws_vpc.main.id
 
   tags = merge(local.resource_tags, {
@@ -51,27 +55,36 @@ resource "aws_security_group" "app" {
   })
 }
 
-# Allow ALB health checks and HTTP traffic into the app tier.
-# Port range is broad for container-port flexibility; narrow when services are fixed.
-resource "aws_vpc_security_group_ingress_rule" "app_from_alb" {
+# Public path: ALB may only reach the frontend host port.
+resource "aws_vpc_security_group_ingress_rule" "app_frontend_from_alb" {
   security_group_id            = aws_security_group.app.id
-  description                  = "HTTP from ALB"
+  description                  = "Frontend from ALB"
   ip_protocol                  = "tcp"
-  from_port                    = 1
-  to_port                      = 65535
+  from_port                    = var.ecs_frontend_host_port
+  to_port                      = var.ecs_frontend_host_port
   referenced_security_group_id = aws_security_group.alb.id
+}
+
+# Private path: backend stays off the ALB; allow VPC peers in the app SG (e.g. frontend→API).
+resource "aws_vpc_security_group_ingress_rule" "app_backend_from_app" {
+  security_group_id            = aws_security_group.app.id
+  description                  = "Backend from app tier (VPC-local only)"
+  ip_protocol                  = "tcp"
+  from_port                    = var.ecs_backend_host_port
+  to_port                      = var.ecs_backend_host_port
+  referenced_security_group_id = aws_security_group.app.id
 }
 
 resource "aws_vpc_security_group_egress_rule" "app_all" {
   security_group_id = aws_security_group.app.id
-  description       = "Allow all egress (image pulls, RDS, AWS APIs via NAT)"
+  description       = "Allow all egress (image pulls, RDS, AWS APIs)"
   ip_protocol       = "-1"
   cidr_ipv4         = "0.0.0.0/0"
 }
 
 resource "aws_security_group" "db" {
   name        = "${local.name_prefix}-db"
-  description = "Baseline for RDS PostgreSQL (app tier only)"
+  description = "RDS PostgreSQL (app tier only)"
   vpc_id      = aws_vpc.main.id
 
   tags = merge(local.resource_tags, {

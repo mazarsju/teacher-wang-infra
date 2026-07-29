@@ -5,7 +5,7 @@
 # - CloudWatch Logs retention kept short (default 7 days).
 # - Push linux/arm64 images to ECR before (or right after) enabling services;
 #   otherwise tasks stay in a pull/start failure loop.
-# - ALB wiring comes later; for now services expose host ports on the instance.
+# - ALB wiring: public ALB forwards only to the frontend; backend stays VPC-local.
 
 locals {
   ecs_backend_image  = "${aws_ecr_repository.app["backend"].repository_url}:${var.ecs_image_tag}"
@@ -181,6 +181,10 @@ resource "aws_ecs_task_definition" "frontend" {
 
       environment = [
         { name = "ENVIRONMENT", value = var.environment },
+        # Same-host Docker bridge gateway → backend host port (not public).
+        # Prefer an nginx/Caddy reverse-proxy /api → this upstream so the browser
+        # never talks to the backend directly.
+        { name = "BACKEND_UPSTREAM", value = "http://172.17.0.1:${var.ecs_backend_host_port}" },
       ]
 
       logConfiguration = {
@@ -256,6 +260,12 @@ resource "aws_ecs_service" "frontend" {
     field = "attribute:ecs.availability-zone"
   }
 
+  load_balancer {
+    target_group_arn = aws_lb_target_group.frontend[0].arn
+    container_name   = "frontend"
+    container_port   = var.ecs_frontend_container_port
+  }
+
   tags = merge(local.resource_tags, {
     Name = "${local.name_prefix}-frontend"
     Tier = "private"
@@ -263,5 +273,6 @@ resource "aws_ecs_service" "frontend" {
 
   depends_on = [
     aws_ecs_cluster_capacity_providers.main,
+    aws_lb_listener.http,
   ]
 }
