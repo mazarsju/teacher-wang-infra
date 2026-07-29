@@ -134,13 +134,35 @@ flowchart TB
   CF -.->|API calls| ALB
 ```
 
+## Environments
+
+Each environment directory is a **Terraform root**. Shared resources live in `modules/infra`; shared defaults live in `environments/common`.
+
+| Path | Role |
+| --- | --- |
+| `modules/infra` | VPC, NAT, route tables, security groups, state bucket |
+| `environments/common` | Shared defaults module (`project_name`, `aws_region`, `az_count`) |
+| `environments/prod` | Prod root — `cd environments/prod && terraform plan` |
+
+```mermaid
+flowchart LR
+  ProdRoot["environments/prod<br/>terraform plan / apply"]
+  Common["environments/common<br/>shared defaults"]
+  Infra["modules/infra<br/>AWS resources"]
+
+  ProdRoot --> Common
+  ProdRoot --> Infra
+```
+
+Add `environments/staging` or `environments/dev` later by copying the `prod` root layout.
+
 ## Cost posture (current networking)
 
 | Component | Cost impact | Notes |
 | --- | --- | --- |
 | VPC, subnets, route tables, SGs, IGW | Free | — |
 | Single NAT Gateway + EIP | Paid (~$32/mo + data) | Toggle with `enable_nat_gateway` |
-| Per-AZ NAT | Avoided in `dev` | Would multiply NAT cost |
+| Per-AZ NAT | Avoided | Would multiply NAT cost; single NAT is enough for now |
 
 ## Related docs
 

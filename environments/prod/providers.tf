@@ -1,8 +1,10 @@
+# Provider config is evaluated before modules, so shared values are inlined here.
+# Keep in sync with environments/common outputs.
 provider "aws" {
-  region = var.aws_region
+  region = "eu-west-1"
 
   # Credentials are resolved from the environment (preferred for now):
-  #   source ../config   # sets AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION
+  #   source ../../../config   # from environments/prod
   # or from AWS_PROFILE / the default AWS shared credentials file.
   #
   # Do not hard-code secrets in Terraform files.
@@ -10,7 +12,7 @@ provider "aws" {
     tags = {
       Project     = "teacher-wang"
       ManagedBy   = "terraform"
-      Environment = var.environment
+      Environment = "prod"
     }
   }
 }

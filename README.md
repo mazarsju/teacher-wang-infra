@@ -25,7 +25,7 @@ System shape (current + planned): [`docs/architecture.md`](docs/architecture.md)
 | Remote state | **S3** with native lock files (`use_lockfile`, no DynamoDB) |
 | Orchestration | Kubernetes on **Amazon EKS** |
 | Containers | **Amazon ECR** (image registry) |
-| Networking | VPC, IGW, single NAT (dev), route tables, security groups, ALB/NLB (planned) |
+| Networking | VPC, IGW, single NAT, route tables, security groups, ALB/NLB (planned) |
 | Database | **Amazon RDS** (PostgreSQL planned; replaces local SQLite for SaaS) |
 | Frontend delivery | S3 + CloudFront and/or ingress on EKS (TBD) |
 | Secrets (later) | AWS Secrets Manager / SSM Parameter Store, IAM roles, OIDC for CI |
@@ -63,20 +63,20 @@ teacher-wang-infra/
 ├── config                   # Your secrets (gitignored) — copy from config.example
 ├── docs/
 │   └── architecture.md      # System diagrams (current + planned)
-└── terraform/
-    ├── .terraform.lock.hcl  # Provider version lock (committed)
-    ├── backend.tf           # S3 remote state + native S3 locking
-    ├── backend.hcl.example  # Template for account-specific backend bucket
-    ├── backend.hcl          # Your backend bucket (gitignored)
-    ├── versions.tf          # Terraform + provider version constraints
-    ├── providers.tf         # AWS provider (region, default tags)
-    ├── variables.tf         # Root input variables
-    ├── main.tf              # Account / region data sources
-    ├── state.tf             # S3 bucket for Terraform state and locks
-    ├── vpc.tf               # VPC, subnets, IGW, single NAT, route tables
-    ├── security_groups.tf   # Baseline SGs (alb / app / db)
-    └── outputs.tf           # Account, region, state, VPC / networking outputs
+├── modules/
+│   └── infra/               # Shared Terraform module (VPC, NAT, SGs, state bucket…)
+└── environments/
+    ├── common/              # Shared defaults module (project, region, AZ count)
+    └── prod/                # Prod root — cd here and run terraform plan/apply
+        ├── backend.tf
+        ├── backend.hcl.example
+        ├── main.tf          # wires module.common + module.infra
+        ├── providers.tf
+        ├── versions.tf
+        └── outputs.tf
 ```
+
+Add `environments/staging` or `environments/dev` later with the same root layout as `prod`.
 
 ## Getting started
 
@@ -98,10 +98,11 @@ source ./config
 
 ### Bootstrap remote state (first time only)
 
-The state bucket cannot exist before the first apply, so bootstrap is two steps:
+The state bucket cannot exist before the first apply, so bootstrap is two steps. Run them from the environment root (e.g. `environments/prod`):
 
 ```bash
-cd terraform
+source ../../config   # from environments/prod
+cd environments/prod
 
 # 1. Create the state bucket with local state (skip remote backend briefly)
 mv backend.tf backend.tf.disabled
@@ -123,14 +124,18 @@ After migration, local `terraform.tfstate` is no longer used; state lives in:
 
 ### Day-to-day usage
 
+Each environment folder is a full Terraform root. From the repo root:
+
 ```bash
-source ../config   # from terraform/, or source ./config from repo root
-cd terraform
-terraform init -backend-config=backend.hcl
+source ./config
+cd environments/prod
+terraform init -backend-config=backend.hcl   # first time / after backend changes
 terraform plan
 terraform apply
 terraform output
 ```
+
+No `-var-file` flags needed: prod values live in `environments/prod/main.tf`; shared defaults come from `environments/common`.
 
 ## Roadmap
 
@@ -145,7 +150,7 @@ terraform output
 ### 2. Networking foundation
 
 - [x] VPC, public/private subnets across AZs
-- [x] NAT, route tables, security group baselines (single NAT in `dev` for cost; `enable_nat_gateway` to toggle)
+- [x] NAT, route tables, security group baselines (single NAT for cost; `enable_nat_gateway` to toggle)
 - [ ] Tagging and naming conventions
 
 ### 3. Data layer
@@ -176,5 +181,5 @@ terraform output
 ### 7. Hardening & production readiness
 
 - [ ] TLS certificates, custom domain
-- [ ] Environments (`dev` / `staging` / `prod`)
+- [x] Environments layout (`environments/prod` root + `environments/common`; staging/dev TBD)
 - [ ] Cost guards, monitoring alerts, least-privilege IAM review

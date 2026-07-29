@@ -13,6 +13,7 @@
 #        terraform init -backend-config=backend.hcl -migrate-state -force-copy
 terraform {
   backend "s3" {
+    # Shared key for now (single env). Switch to teacher-wang/<env>/... when adding staging/dev.
     key          = "teacher-wang/terraform.tfstate"
     region       = "eu-west-1"
     encrypt      = true
