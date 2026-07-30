@@ -15,8 +15,16 @@ The application is composed of:
 This repo provisions and wires those pieces together with **Terraform**.
 
 System shape (current + planned): [`docs/architecture.md`](docs/architecture.md).  
-Why ECS not EKS: [`docs/architecture-choice-ecs.md`](docs/architecture-choice-ecs.md).  
 Naming and tags: [`docs/tagging-and-naming.md`](docs/tagging-and-naming.md).
+
+## Architecture decisions
+
+Longer design notes live under `docs/` as `*-archi-decision.md` (see `agent.md` for archiving rules):
+
+- [ECS instead of EKS](docs/ecs-archi-decision.md) — Spot Graviton on ECS; no EKS control-plane fee
+- [Multi-user auth & tenancy](docs/multi-user-archi-decision.md) — Cognito; shared schema + RLS + partitions; shared read-only catalog
+
+Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 
 ## Technologies
 
@@ -67,9 +75,11 @@ teacher-wang-infra/
 ├── config.example           # Template for local AWS credentials
 ├── config                   # Your secrets (gitignored) — copy from config.example
 ├── docs/
-│   ├── architecture.md              # System diagrams (current + planned)
-│   ├── architecture-choice-ecs.md   # Why ECS instead of EKS
-│   └── tagging-and-naming.md        # Resource Name pattern and required tags
+│   ├── architecture.md                       # Living system overview (current + planned)
+│   ├── ecs-archi-decision.md                 # Why ECS instead of EKS
+│   ├── multi-user-archi-decision.md          # Cognito + shared-schema tenancy
+│   ├── tagging-and-naming.md                 # Resource Name pattern and required tags
+│   └── archived/                             # Obsolete *-archi-decision.md files
 ├── modules/
 │   └── infra/               # Shared module: naming, vpc, SGs, state, rds, ecr, ecs, alb, route53, …
 └── environments/
@@ -223,7 +233,7 @@ When enabled, Terraform also creates:
 - Frontend URL: `http://$(terraform output -raw alb_dns_name)`
 - Backend receives `DB_*` / `DB_PASSWORD`; frontend receives `BACKEND_UPSTREAM` (`http://172.17.0.1:5000`) for a same-host reverse proxy (browser must not call the API directly).
 
-See [`docs/architecture-choice-ecs.md`](docs/architecture-choice-ecs.md) for why this is preferred over EKS.
+See [`docs/ecs-archi-decision.md`](docs/ecs-archi-decision.md) for why this is preferred over EKS.
 
 ## Roadmap
 
@@ -264,18 +274,26 @@ App runtime integration (DB connection, reverse-proxy to `BACKEND_UPSTREAM`, COR
 - [x] Route 53 hosted zone + apex alias for `teacherwang.xyz`
 - [x] ACM certificate (DNS validation) and ALB HTTPS listener (HTTP→HTTPS)
 
-### 6. Secrets & CI/CD _(later)_
+### 6. Multi-user auth & data isolation _(decided — implement next)_
+
+Decision record: [`docs/multi-user-archi-decision.md`](docs/multi-user-archi-decision.md) (Cognito; shared schema + RLS + partitions; shared read-only catalog).
+
+- [x] Choose identity + tenancy + shared-data model
+- [ ] Provision Cognito (user pool, app client, Google IdP) and wire app JWT verification
+- [ ] App schema: per-user private tables (`user_id` + RLS + partitions) + shared read-only catalog; `app` / `migrator` DB roles
+
+### 7. Secrets & CI/CD _(later)_
 
 - [ ] Replace local `config` keys with IAM roles / AWS SSO / OIDC
 - [ ] Store app secrets in Secrets Manager or SSM
 - [ ] Pipeline to build images, push to ECR, and apply Terraform / deploy
 
-### 7. Observability _(later)_
+### 8. Observability _(later)_
 
 - [ ] Health checks on ALB / ECS tasks
 - [ ] Basic CloudWatch dashboards and alarms
 
-### 8. Hardening & cost _(later)_
+### 9. Hardening & cost _(later)_
 
 - [ ] Cost guards, budgets / alerts
 - [ ] Least-privilege IAM review

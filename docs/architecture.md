@@ -3,7 +3,8 @@
 Living overview of the AWS layout provisioned by this repository.
 Update this file whenever components are added, removed, or rewired.
 
-Platform decision (ECS vs EKS): [`architecture-choice-ecs.md`](architecture-choice-ecs.md).
+Platform decision (ECS vs EKS): [`ecs-archi-decision.md`](ecs-archi-decision.md).  
+Multi-user auth / tenancy / shared data: [`multi-user-archi-decision.md`](multi-user-archi-decision.md).
 
 ## Current state (networking + data + registry + optional ECS)
 
@@ -121,7 +122,7 @@ flowchart LR
 
 ### ECS (optional — `enable_ecs`)
 
-Toggle in `environments/prod/main.tf`. See [`architecture-choice-ecs.md`](architecture-choice-ecs.md).
+Toggle in `environments/prod/main.tf`. See [`ecs-archi-decision.md`](ecs-archi-decision.md).
 
 | Setting | Value | Rationale |
 | --- | --- | --- |
@@ -262,12 +263,13 @@ Summary:
 | ACM public cert | Free | DNS-validated for the ALB hostname |
 | ECS task logs (7-day retention) | Low | `/ecs/…/backend` and `/frontend` |
 | Public IPv4 on ECS instances | ~$3.6/mo each when associated | Public subnet placement (no NAT) |
-| EKS control plane | Avoided (~$73/mo) | See architecture-choice doc |
+| EKS control plane | Avoided (~$73/mo) | See [`ecs-archi-decision.md`](ecs-archi-decision.md) |
 | Per-AZ NAT | Avoided | Would multiply NAT cost; single NAT is enough for now |
 
 ## Related docs
 
 - [README.md](../README.md) — roadmap, getting started, tech choices
-- [architecture-choice-ecs.md](architecture-choice-ecs.md) — why ECS instead of EKS
+- [ecs-archi-decision.md](ecs-archi-decision.md) — why ECS instead of EKS
+- [multi-user-archi-decision.md](multi-user-archi-decision.md) — credentials, per-user isolation, shared read-only data
 - [tagging-and-naming.md](tagging-and-naming.md) — Name pattern and required tags
 - [agent.md](../agent.md) — agent rules (keep README + docs in sync)

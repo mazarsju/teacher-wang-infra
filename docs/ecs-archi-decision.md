@@ -1,8 +1,12 @@
-# Architecture choice: ECS instead of EKS
+# ECS Architecture
 
 Decision record for how we run **teacher-wang-app** (Flask backend + React frontend) on AWS.
 
 Related: [`architecture.md`](architecture.md) (what is provisioned), [`../README.md`](../README.md) (roadmap and toggles).
+
+## Status
+
+Accepted
 
 ## Decision
 

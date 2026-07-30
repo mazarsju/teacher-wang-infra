@@ -3,6 +3,8 @@
 Source of truth for how AWS resources are named and tagged in this repository.
 Follow these rules when adding or changing infrastructure.
 
+This is a **conventions** doc, not an architecture decision record. Platform choices live in `docs/*-archi-decision.md`; the living AWS layout is in [`architecture.md`](architecture.md).
+
 ## Naming
 
 ### Pattern
