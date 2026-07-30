@@ -10,7 +10,7 @@ The application is composed of:
 | --- | --- | --- |
 | Frontend | React, TypeScript, Vite | AWS (CDN / ECS container) |
 | Backend | Python, Flask, SQLAlchemy | AWS (**ECS** on EC2) |
-| Database | SQLite today → managed DB in cloud | AWS RDS (PostgreSQL) |
+| Database | PostgreSQL | AWS RDS (PostgreSQL) |
 
 This repo provisions and wires those pieces together with **Terraform**.
 
@@ -231,6 +231,7 @@ See [`docs/architecture-choice-ecs.md`](docs/architecture-choice-ecs.md) for why
 
 - [x] Initialize infra repo with README, `agent.md`, and `.gitignore`
 - [x] Terraform scaffolding (`versions`, `providers`, `variables`, bootstrap outputs)
+- [x] Environments layout (`environments/prod` root + `environments/common`)
 - [x] Local AWS credentials via gitignored `config` (temporary)
 - [x] Validate `terraform init` / `plan` against a real AWS account
 - [x] Remote state on S3 with native S3 locking (`use_lockfile`)
@@ -246,7 +247,7 @@ See [`docs/architecture-choice-ecs.md`](docs/architecture-choice-ecs.md) for why
 - [x] RDS PostgreSQL (cheap sizing: `db.t4g.micro`, single-AZ, private, Secrets Manager password)
 - [ ] Backup / retention policy (currently 1-day automated backups — free-tier max)
 
-Schema / migrations from the app’s SQLite models → Postgres live in **[teacher-wang-app](https://github.com/mazarsju/teacher-wang-app)** (DB URL config + Alembic); this repo only provisions the empty database.
+Schema / migrations live in **[teacher-wang-app](https://github.com/mazarsju/teacher-wang-app)** (DB URL config + Alembic); this repo only provisions the empty PostgreSQL database.
 
 ### 4. Container platform
 
@@ -254,22 +255,29 @@ Schema / migrations from the app’s SQLite models → Postgres live in **[teach
 - [x] ECS cluster + EC2 Spot capacity (gated by `enable_ecs`, default off; no EKS)
 - [x] ECS task definitions and services (frontend + backend)
 - [x] ALB ingress (public frontend only; backend VPC-local)
-- [x] HTTPS on ALB (`teacherwang.xyz` via ACM + Route 53; HTTP→HTTPS)
+- [x] Task env wiring: backend `DB_*` / `DB_PASSWORD`, frontend `BACKEND_UPSTREAM`
 
-### 5. Application deployment
+App runtime integration (DB connection, reverse-proxy to `BACKEND_UPSTREAM`, CORS) lives in **[teacher-wang-app](https://github.com/mazarsju/teacher-wang-app)** — infra already injects the env vars.
 
-- [ ] Wire backend ↔ RDS (secret ARN / connection URL) and frontend ↔ backend proxy / CORS
-- [ ] Frontend hosting extras (S3+CloudFront if leaving ECS)
-- [ ] Health checks and basic observability (CloudWatch)
+### 5. Public DNS & TLS
 
-### 6. Secrets & CI/CD
+- [x] Route 53 hosted zone + apex alias for `teacherwang.xyz`
+- [x] ACM certificate (DNS validation) and ALB HTTPS listener (HTTP→HTTPS)
+
+### 6. Secrets & CI/CD _(later)_
 
 - [ ] Replace local `config` keys with IAM roles / AWS SSO / OIDC
 - [ ] Store app secrets in Secrets Manager or SSM
 - [ ] Pipeline to build images, push to ECR, and apply Terraform / deploy
 
-### 7. Hardening & production readiness
+### 7. Observability _(later)_
 
-- [x] TLS certificates + custom domain (`teacherwang.xyz`)
-- [x] Environments layout (`environments/prod` root + `environments/common`; staging/dev TBD)
-- [ ] Cost guards, monitoring alerts, least-privilege IAM review
+- [ ] Health checks on ALB / ECS tasks
+- [ ] Basic CloudWatch dashboards and alarms
+
+### 8. Hardening & cost _(later)_
+
+- [ ] Cost guards, budgets / alerts
+- [ ] Least-privilege IAM review
+- [ ] Additional environments (`staging` / `dev`)
+- [ ] Optional: S3 + CloudFront frontend if leaving ECS
