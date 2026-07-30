@@ -274,5 +274,6 @@ resource "aws_ecs_service" "frontend" {
   depends_on = [
     aws_ecs_cluster_capacity_providers.main,
     aws_lb_listener.http,
+    aws_lb_listener.https,
   ]
 }

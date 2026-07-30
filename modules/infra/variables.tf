@@ -158,9 +158,20 @@ variable "ecs_log_retention_days" {
 }
 
 variable "alb_frontend_health_check_path" {
-  description = "HTTP health check path for the frontend target group"
+  description = "HTTP health check path for the frontend target group (app serves GET /health from nginx)"
   type        = string
-  default     = "/"
+  default     = "/health"
+}
+
+variable "alb_domain_name" {
+  description = "Apex domain for the public site (e.g. teacherwang.xyz). Creates Route 53 zone + ACM; enables HTTPS on the ALB when enable_ecs is true. Null skips DNS/TLS."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.alb_domain_name == null || can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$", var.alb_domain_name))
+    error_message = "alb_domain_name must be a lowercase FQDN (e.g. teacherwang.xyz) or null."
+  }
 }
 
 variable "additional_tags" {

@@ -27,9 +27,10 @@ Naming and tags: [`docs/tagging-and-naming.md`](docs/tagging-and-naming.md).
 | Remote state | **S3** with native lock files (`use_lockfile`, no DynamoDB) |
 | Orchestration | **Amazon ECS** on EC2 (Spot Graviton) — not EKS |
 | Containers | **Amazon ECR** (image registry) |
-| Networking | VPC, IGW, single NAT (optional), route tables, security groups, ALB (planned) |
+| Networking | VPC, IGW, single NAT (optional), route tables, security groups, ALB |
 | Database | **Amazon RDS** PostgreSQL (`db.t4g.micro`, single-AZ) |
-| Frontend delivery | ECS service and/or S3 + CloudFront (TBD) |
+| Frontend delivery | ECS behind ALB at **https://teacherwang.xyz** (ACM + Route 53) |
+| DNS / TLS | **Route 53** hosted zone + free **ACM** cert; HTTP→HTTPS redirect |
 | Secrets (now) | RDS master password in **Secrets Manager** (RDS-managed); broader secrets later |
 | Credentials (now) | Local gitignored `config` file — temporary |
 | Cost posture | Cheapest viable defaults (see `agent.md`) |
@@ -46,14 +47,14 @@ Naming and tags: [`docs/tagging-and-naming.md`](docs/tagging-and-naming.md).
 - **RDS** — PostgreSQL 16, `db.t4g.micro`, single-AZ, private subnets; master password in Secrets Manager
 - **ECR** — private repos for backend and frontend images (AES256, scan-on-push, lifecycle retention)
 - **ECS** — optional (`enable_ecs`); free control plane + Spot `t4g.small` capacity; backend/frontend task definitions and services (off by default)
-- **ALB** — optional with ECS; internet-facing HTTP → frontend only (backend stays off the ALB)
+- **ALB** — optional with ECS; internet-facing HTTP→HTTPS redirect + HTTPS → frontend only (backend stays off the ALB)
+- **Route 53** — public hosted zone for `teacherwang.xyz` when `alb_domain_name` is set (~$0.50/mo)
+- **ACM** — free public TLS certificate for `teacherwang.xyz` (DNS-validated via Route 53)
 
 **Planned**
 
 - **S3 / CloudFront** — static frontend hosting (if not served from ECS)
 - **IAM** — least-privilege roles for Terraform and workloads (ECS instance / execution / task roles exist when ECS is on)
-- **TLS / ACM** — HTTPS listener on the ALB
-- **Route 53** — DNS (when a public domain is configured)
 
 ## Repository structure
 
@@ -62,6 +63,7 @@ teacher-wang-infra/
 ├── agent.md                 # Instructions for coding agents (keep README + architecture in sync)
 ├── README.md                # Source of truth for status, stack, and layout
 ├── .gitignore               # Ignores local secrets, Terraform state, OS junk
+├── .cursor/skills/          # Cursor agent skills (e.g. tf state lock recovery)
 ├── config.example           # Template for local AWS credentials
 ├── config                   # Your secrets (gitignored) — copy from config.example
 ├── docs/
@@ -69,7 +71,7 @@ teacher-wang-infra/
 │   ├── architecture-choice-ecs.md   # Why ECS instead of EKS
 │   └── tagging-and-naming.md        # Resource Name pattern and required tags
 ├── modules/
-│   └── infra/               # Shared module: naming, vpc, SGs, state, rds, ecr, ecs, alb, …
+│   └── infra/               # Shared module: naming, vpc, SGs, state, rds, ecr, ecs, alb, route53, …
 └── environments/
     ├── common/              # Shared defaults module (project, region, AZ count)
     └── prod/                # Prod root — cd here and run terraform plan/apply
@@ -141,6 +143,25 @@ terraform output
 ```
 
 No `-var-file` flags needed: prod values live in `environments/prod/main.tf`; shared defaults come from `environments/common`.
+
+### Public HTTPS (`teacherwang.xyz`)
+
+Prod sets `alb_domain_name = "teacherwang.xyz"`. The domain is registered at **Namecheap**; Terraform provisions a Route 53 hosted zone and a free ACM certificate. The ALB HTTPS listener and apex alias appear when `enable_ecs = true`.
+
+1. Domain **`teacherwang.xyz`** is already registered at Namecheap.
+2. Apply Terraform (zone + ACM validation records can be created even with ECS off):
+
+```bash
+source ./config
+cd environments/prod
+terraform apply
+terraform output route53_name_servers
+```
+
+3. In Namecheap (Domain List → Manage → Nameservers → Custom DNS), set nameservers to the `route53_name_servers` output (one-time).
+4. Wait for NS delegation; ACM validation may take a few minutes (apply can wait up to 45m on `aws_acm_certificate_validation`).
+5. Turn on the app (`enable_ecs = true`), apply again → HTTPS listener + `A` alias → open **https://teacherwang.xyz** (HTTP redirects to HTTPS).
+6. AnkiConnect: keep `webCorsOriginList: ["*"]` or add `https://teacherwang.xyz`.
 
 ### Push images to ECR (from teacher-wang-app)
 
@@ -233,6 +254,7 @@ Schema / migrations from the app’s SQLite models → Postgres live in **[teach
 - [x] ECS cluster + EC2 Spot capacity (gated by `enable_ecs`, default off; no EKS)
 - [x] ECS task definitions and services (frontend + backend)
 - [x] ALB ingress (public frontend only; backend VPC-local)
+- [x] HTTPS on ALB (`teacherwang.xyz` via ACM + Route 53; HTTP→HTTPS)
 
 ### 5. Application deployment
 
@@ -248,6 +270,6 @@ Schema / migrations from the app’s SQLite models → Postgres live in **[teach
 
 ### 7. Hardening & production readiness
 
-- [ ] TLS certificates, custom domain
+- [x] TLS certificates + custom domain (`teacherwang.xyz`)
 - [x] Environments layout (`environments/prod` root + `environments/common`; staging/dev TBD)
 - [ ] Cost guards, monitoring alerts, least-privilege IAM review

@@ -5,6 +5,8 @@ config
 **/.terraform/
 **/terraform.tfstate
 **/terraform.tfstate.*
+**/last.terraform.tfstate
+**/last.terraform.tfstate.*
 **/terraform.tfvars
 **/backend.hcl
 **/crash.log

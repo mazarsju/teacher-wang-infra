@@ -9,7 +9,8 @@
 # - DB: 5432 from app SG
 
 resource "aws_security_group" "alb" {
-  name        = "${local.name_prefix}-alb"
+  name = "${local.name_prefix}-alb"
+  # Description changes force SG replacement — keep stable.
   description = "Public Application Load Balancer"
   vpc_id      = aws_vpc.main.id
 
@@ -30,7 +31,7 @@ resource "aws_vpc_security_group_ingress_rule" "alb_http" {
 
 resource "aws_vpc_security_group_ingress_rule" "alb_https" {
   security_group_id = aws_security_group.alb.id
-  description       = "HTTPS from internet (reserved for future ACM listener)"
+  description       = "HTTPS from internet"
   ip_protocol       = "tcp"
   from_port         = 443
   to_port           = 443
@@ -45,8 +46,9 @@ resource "aws_vpc_security_group_egress_rule" "alb_all" {
 }
 
 resource "aws_security_group" "app" {
-  name        = "${local.name_prefix}-app"
-  description = "Application workloads (ECS instances / tasks)"
+  name = "${local.name_prefix}-app"
+  # Keep stable: changing description forces replacement and breaks RDS/ECS attachments.
+  description = "Baseline for private application workloads (EKS nodes / pods)"
   vpc_id      = aws_vpc.main.id
 
   tags = merge(local.resource_tags, {
@@ -83,8 +85,9 @@ resource "aws_vpc_security_group_egress_rule" "app_all" {
 }
 
 resource "aws_security_group" "db" {
-  name        = "${local.name_prefix}-db"
-  description = "RDS PostgreSQL (app tier only)"
+  name = "${local.name_prefix}-db"
+  # Keep stable: changing description forces replacement while RDS holds the ENI.
+  description = "Baseline for RDS PostgreSQL (app tier only)"
   vpc_id      = aws_vpc.main.id
 
   tags = merge(local.resource_tags, {

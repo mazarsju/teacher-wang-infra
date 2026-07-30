@@ -48,6 +48,8 @@ Implemented in Terraform as `local.name_prefix = "${var.project_name}-${var.envi
 | ECS frontend service / task family | `teacher-wang-prod-frontend` |
 | ALB | `teacher-wang-prod-alb` |
 | ALB frontend target group | `teacher-wang-prod-frontend` |
+| Route 53 zone (Name tag) | `teacher-wang-prod-dns` |
+| ACM certificate (Name tag) | `teacher-wang-prod-alb-cert` |
 
 ### Exceptions
 
@@ -87,7 +89,7 @@ Extra tags can be passed into the infra module via `additional_tags` and are mer
 
 | Tier | Used for |
 | --- | --- |
-| `public` | Public subnets, public route tables, ALB SG |
+| `public` | Public subnets, public route tables, ALB SG, Route 53 zone, ACM cert |
 | `private` | Private subnets, private route tables, app SG |
 | `data` | Database SG, DB subnet group, RDS |
 | `shared` | Account-level or registry resources (state bucket, ECR) |
@@ -97,9 +99,14 @@ Extra tags can be passed into the infra module via `additional_tags` and are mer
 - Individual security group **rules** — they inherit `default_tags`; no custom `Name` needed.
 - Route table **associations** and plain **routes** — not useful in the console.
 
-## Future (TLS / DNS)
+## TLS / DNS
 
-When adding HTTPS, attach an ACM certificate to an ALB `:443` listener (HTTP can redirect). Prefer explicit Terraform subnet IDs for the ALB over controller-style subnet tags.
+- Domain: `teacherwang.xyz` (`alb_domain_name` in prod), registered at **Namecheap**.
+- Route 53 public hosted zone + ACM DNS validation + apex alias to the ALB.
+- ALB `:443` HTTPS listener (TLS 1.2/1.3 policy); `:80` redirects to HTTPS when the domain is configured.
+- After creating the zone, in Namecheap set Custom DNS nameservers to Terraform output `route53_name_servers`.
+
+Prefer explicit Terraform subnet IDs for the ALB over controller-style subnet tags.
 
 ## Checklist for new resources
 

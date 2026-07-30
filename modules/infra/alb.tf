@@ -3,11 +3,12 @@
 # Cost notes:
 # - ALB ~$16/mo + LCU charges whenever enable_ecs is true (destroyed with ECS).
 # - No access logs / WAF yet (extra cost).
-# - HTTP only until ACM/TLS is on the roadmap; HTTPS SG rule reserved for later.
+# - HTTPS when alb_domain_name is set (ACM is free; Route 53 zone ~$0.50/mo).
 #
 # Security model:
 # - Internet → ALB → frontend target group (host port).
 # - Backend is NOT registered on the ALB (VPC / same-host only).
+# - With HTTPS: :443 terminates TLS; :80 redirects to HTTPS.
 
 resource "aws_lb" "app" {
   count = var.enable_ecs ? 1 : 0
@@ -66,13 +67,49 @@ resource "aws_lb_listener" "http" {
   port              = 80
   protocol          = "HTTP"
 
+  dynamic "default_action" {
+    for_each = local.alb_https_enabled ? [1] : []
+    content {
+      type = "redirect"
+
+      redirect {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+  }
+
+  dynamic "default_action" {
+    for_each = local.alb_https_enabled ? [] : [1]
+    content {
+      type             = "forward"
+      target_group_arn = aws_lb_target_group.frontend[0].arn
+    }
+  }
+
+  tags = merge(local.resource_tags, {
+    Name = "${local.name_prefix}-alb-http"
+    Tier = "public"
+  })
+}
+
+resource "aws_lb_listener" "https" {
+  count = local.alb_https_enabled ? 1 : 0
+
+  load_balancer_arn = aws_lb.app[0].arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = aws_acm_certificate_validation.alb[0].certificate_arn
+
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.frontend[0].arn
   }
 
   tags = merge(local.resource_tags, {
-    Name = "${local.name_prefix}-alb-http"
+    Name = "${local.name_prefix}-alb-https"
     Tier = "public"
   })
 }

@@ -6,4 +6,8 @@ locals {
 
   # Merged onto resources that accept tags (default_tags still apply from the root provider).
   resource_tags = var.additional_tags
+
+  alb_domain_configured = var.alb_domain_name != null && var.alb_domain_name != ""
+  # HTTPS listener + apex alias require both a domain and a live ALB (ECS on).
+  alb_https_enabled = var.enable_ecs && local.alb_domain_configured
 }

@@ -14,7 +14,7 @@ Related: [`architecture.md`](architecture.md) (what is provisioned), [`../README
 | Compute | **EC2** launch type, capacity provider on an ASG |
 | Instance | `t4g.small` Spot (ARM), one instance for both apps |
 | Placement | Public subnets + public IP (no NAT required) |
-| Ingress | Public ALB → **frontend only**; backend VPC-local (`BACKEND_UPSTREAM`) |
+| Ingress | Public ALB → **frontend only** (HTTPS when domain set); backend VPC-local (`BACKEND_UPSTREAM`) |
 | Toggle | `enable_ecs` in `environments/prod/main.tf` (default `false`) |
 | Images | Same ECR repos (`backend`, `frontend`); build `linux/arm64` for Graviton |
 
@@ -61,7 +61,7 @@ EKS remains a valid **later** choice for multi-service platforms or strong Kuber
 ```mermaid
 flowchart TB
   Users((Users))
-  ALB["Public ALB :80"]
+  ALB["Public ALB :443"]
   CF["CloudFront + S3 — optional for SPA"]
 
   Users --> ALB

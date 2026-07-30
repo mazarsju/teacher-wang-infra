@@ -218,3 +218,33 @@ output "alb_frontend_target_group_arn" {
   value       = try(aws_lb_target_group.frontend[0].arn, null)
 }
 
+output "alb_https_enabled" {
+  description = "True when the ALB has an HTTPS listener (ECS on + alb_domain_name set)"
+  value       = local.alb_https_enabled
+}
+
+output "alb_https_url" {
+  description = "Public HTTPS URL when domain + ECS are configured (null otherwise)"
+  value       = local.alb_https_enabled ? "https://${var.alb_domain_name}" : null
+}
+
+output "alb_acm_certificate_arn" {
+  description = "ACM certificate ARN for the ALB domain (null when alb_domain_name is unset)"
+  value       = try(aws_acm_certificate.alb[0].arn, null)
+}
+
+output "route53_zone_id" {
+  description = "Route 53 hosted zone ID for alb_domain_name (null when unset)"
+  value       = try(aws_route53_zone.app[0].zone_id, null)
+}
+
+output "route53_name_servers" {
+  description = "Route 53 name servers — set these in Namecheap Custom DNS (null when no domain)"
+  value       = try(aws_route53_zone.app[0].name_servers, null)
+}
+
+output "alb_domain_name" {
+  description = "Configured public domain (null when unset)"
+  value       = var.alb_domain_name
+}
+

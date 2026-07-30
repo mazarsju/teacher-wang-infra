@@ -9,7 +9,7 @@ Platform decision (ECS vs EKS): [`architecture-choice-ecs.md`](architecture-choi
 
 Provisioned today: remote state, VPC, subnets, IGW, optional single NAT, route tables, security group baselines, RDS PostgreSQL (single-AZ, `db.t4g.micro`), and ECR repositories for backend/frontend images.
 ECS is **optional** via `enable_ecs` (default `false`) — control plane is free; cost is the Spot EC2 instance + ALB. When enabled, backend/frontend services and a **public ALB (frontend only)** are created too.
-Not yet provisioned (shown dashed in the target view): CloudFront, Route 53, TLS.
+DNS/TLS for **`teacherwang.xyz`** (registered at **Namecheap**; Route 53 + ACM via `alb_domain_name`); HTTPS listeners attach when ECS is on. Not yet provisioned (shown dashed in the target view): CloudFront.
 
 ### High-level AWS account
 
@@ -140,10 +140,21 @@ Toggle in `environments/prod/main.tf`. See [`architecture-choice-ecs.md`](archit
 | Setting | Value | Rationale |
 | --- | --- | --- |
 | Scheme | Internet-facing | Public web UI only |
-| Listener | HTTP `:80` → frontend TG | TLS/ACM later |
+| Domain | `teacherwang.xyz` (Namecheap; `alb_domain_name`) | Cheap `.xyz` + Route 53 |
+| Listener HTTP `:80` | Redirect → HTTPS when domain set; else forward | Force secure context for browsers / AnkiConnect |
+| Listener HTTPS `:443` | ACM cert → frontend TG | Free public ACM certificate |
 | Frontend TG | Instance targets, host port 8080 | Bridge-mode ECS |
 | Backend | Not registered on ALB | API stays VPC-local; frontend should reverse-proxy via `BACKEND_UPSTREAM` |
 | Access logs | Off | Avoid S3 log storage cost |
+
+### DNS / TLS (`alb_domain_name`)
+
+| Setting | Value | Rationale |
+| --- | --- | --- |
+| Route 53 zone | Apex `teacherwang.xyz` | ~$0.50/mo; automatic ACM validation + alias |
+| ACM | DNS-validated, same region as ALB | Free; required for trusted HTTPS |
+| Apex record | Alias `A` → ALB | Only while `enable_ecs` is true |
+| Registrar | **Namecheap** — Custom DNS → `route53_name_servers` | One-time after zone create |
 
 ### Terraform remote state
 
@@ -164,7 +175,7 @@ flowchart TB
   Users((Users))
 
   CF["CloudFront + S3<br/>(frontend — optional later)"]
-  R53["Route 53 — planned"]
+  R53["Route 53<br/>teacherwang.xyz"]
 
   Users --> R53
   R53 --> ALB
@@ -172,7 +183,7 @@ flowchart TB
   Users -.-> CF
 
   subgraph VPC["VPC"]
-    ALB["ALB · public<br/>SG alb · HTTP :80"]
+    ALB["ALB · public<br/>SG alb · :80→:443 · HTTPS"]
 
     subgraph Public["Public subnets"]
       FE["ECS frontend<br/>public via ALB"]
@@ -209,7 +220,7 @@ Each environment directory is a **Terraform root**. Shared resources live in `mo
 
 | Path | Role |
 | --- | --- |
-| `modules/infra` | VPC, NAT, route tables, security groups, state bucket, RDS, ECR, optional ECS + ALB |
+| `modules/infra` | VPC, NAT, route tables, security groups, state bucket, RDS, ECR, optional ECS + ALB, Route 53 + ACM |
 | `environments/common` | Shared defaults module (`project_name`, `aws_region`, `az_count`) |
 | `environments/prod` | Prod root — `cd environments/prod && terraform plan` |
 
@@ -247,6 +258,8 @@ Summary:
 | ECS control plane | **Free** | Why we chose ECS over EKS |
 | ECS Spot `t4g.small` | Paid (~$5–12/mo) when on | Toggle with `enable_ecs` (default off) |
 | ALB (with ECS) | Paid (~$16/mo + LCU) when on | Public frontend only; destroyed with `enable_ecs` |
+| Route 53 hosted zone | ~$0.50/mo when `alb_domain_name` set | `teacherwang.xyz` (Namecheap registration) |
+| ACM public cert | Free | DNS-validated for the ALB hostname |
 | ECS task logs (7-day retention) | Low | `/ecs/…/backend` and `/frontend` |
 | Public IPv4 on ECS instances | ~$3.6/mo each when associated | Public subnet placement (no NAT) |
 | EKS control plane | Avoided (~$73/mo) | See architecture-choice doc |

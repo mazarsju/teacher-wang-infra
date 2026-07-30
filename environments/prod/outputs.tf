@@ -213,3 +213,33 @@ output "alb_frontend_target_group_arn" {
   description = "Frontend target group ARN (null when enable_ecs is false)"
   value       = module.infra.alb_frontend_target_group_arn
 }
+
+output "alb_https_enabled" {
+  description = "True when the ALB has an HTTPS listener"
+  value       = module.infra.alb_https_enabled
+}
+
+output "alb_https_url" {
+  description = "Public HTTPS URL (https://teacherwang.xyz when ECS + domain are on)"
+  value       = module.infra.alb_https_url
+}
+
+output "alb_acm_certificate_arn" {
+  description = "ACM certificate ARN for teacherwang.xyz"
+  value       = module.infra.alb_acm_certificate_arn
+}
+
+output "alb_domain_name" {
+  description = "Configured public domain"
+  value       = module.infra.alb_domain_name
+}
+
+output "route53_zone_id" {
+  description = "Route 53 hosted zone ID"
+  value       = module.infra.route53_zone_id
+}
+
+output "route53_name_servers" {
+  description = "Set these nameservers in Namecheap (Custom DNS) for teacherwang.xyz"
+  value       = module.infra.route53_name_servers
+}
