@@ -6,7 +6,7 @@ Related: [`architecture.md`](architecture.md) (what is provisioned), [`ecs-archi
 
 ## Status
 
-Accepted — implement in the app + this repo when ready. No Cognito / role infra provisioned yet.
+Accepted — Cognito User Pool + app client (+ optional Google IdP) provisioned in this repo; Flask JWT verification lives in teacher-wang-app. Postgres `app` / `migrator` roles and shared-schema tenancy still to implement.
 
 ## Decision summary
 

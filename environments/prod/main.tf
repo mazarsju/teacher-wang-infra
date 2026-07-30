@@ -9,6 +9,7 @@ locals {
   # Public site hostname (Route 53 + ACM). Domain registered at Namecheap; set
   # Namecheap Custom DNS to terraform output route53_name_servers. HTTPS when enable_ecs is true.
   alb_domain_name = "teacherwang.xyz"
+
 }
 
 module "common" {
@@ -26,4 +27,10 @@ module "infra" {
   enable_nat_gateway = local.enable_nat_gateway
   enable_ecs         = local.enable_ecs
   alb_domain_name    = local.alb_domain_name
+
+  # Google SSO (optional). Set via TF_VAR_cognito_google_client_id / _secret
+  # (see config.example). Redirect URI after apply:
+  #   ${cognito_hosted_ui_base_url}/oauth2/idpresponse
+  cognito_google_client_id     = var.cognito_google_client_id
+  cognito_google_client_secret = var.cognito_google_client_secret
 }

@@ -123,6 +123,10 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "DB_PORT", value = tostring(aws_db_instance.main.port) },
         { name = "DB_NAME", value = aws_db_instance.main.db_name },
         { name = "DB_USER", value = var.db_username },
+        { name = "COGNITO_REGION", value = var.aws_region },
+        { name = "COGNITO_USER_POOL_ID", value = aws_cognito_user_pool.main.id },
+        { name = "COGNITO_APP_CLIENT_ID", value = aws_cognito_user_pool_client.app.id },
+        { name = "COGNITO_ISSUER", value = local.cognito_issuer },
       ]
 
       secrets = local.ecs_db_password_secret_arn == null ? [] : [
@@ -185,6 +189,11 @@ resource "aws_ecs_task_definition" "frontend" {
         # Prefer an nginx/Caddy reverse-proxy /api → this upstream so the browser
         # never talks to the backend directly.
         { name = "BACKEND_UPSTREAM", value = "http://172.17.0.1:${var.ecs_backend_host_port}" },
+        # Public Cognito ids for a future SPA login (Vite may need build-time inject).
+        { name = "COGNITO_REGION", value = var.aws_region },
+        { name = "COGNITO_USER_POOL_ID", value = aws_cognito_user_pool.main.id },
+        { name = "COGNITO_APP_CLIENT_ID", value = aws_cognito_user_pool_client.app.id },
+        { name = "COGNITO_DOMAIN", value = aws_cognito_user_pool_domain.main.domain },
       ]
 
       logConfiguration = {
@@ -216,6 +225,10 @@ resource "aws_ecs_service" "backend" {
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
 
+  # Avoid delete waiters timing out while ECS is still DRAINING; a timed-out
+  # delete leaves the name reserved and blocks the next CreateService.
+  force_delete = true
+
   capacity_provider_strategy {
     capacity_provider = aws_ecs_capacity_provider.ec2[0].name
     weight            = 1
@@ -225,6 +238,10 @@ resource "aws_ecs_service" "backend" {
   ordered_placement_strategy {
     type  = "spread"
     field = "attribute:ecs.availability-zone"
+  }
+
+  timeouts {
+    delete = "45m"
   }
 
   tags = merge(local.resource_tags, {
@@ -249,6 +266,9 @@ resource "aws_ecs_service" "frontend" {
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
 
+  # Same as backend: force past stuck DRAINING so the fixed service name can be reused.
+  force_delete = true
+
   capacity_provider_strategy {
     capacity_provider = aws_ecs_capacity_provider.ec2[0].name
     weight            = 1
@@ -264,6 +284,10 @@ resource "aws_ecs_service" "frontend" {
     target_group_arn = aws_lb_target_group.frontend[0].arn
     container_name   = "frontend"
     container_port   = var.ecs_frontend_container_port
+  }
+
+  timeouts {
+    delete = "45m"
   }
 
   tags = merge(local.resource_tags, {

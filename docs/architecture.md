@@ -6,10 +6,10 @@ Update this file whenever components are added, removed, or rewired.
 Platform decision (ECS vs EKS): [`ecs-archi-decision.md`](ecs-archi-decision.md).  
 Multi-user auth / tenancy / shared data: [`multi-user-archi-decision.md`](multi-user-archi-decision.md).
 
-## Current state (networking + data + registry + optional ECS)
+## Current state (networking + data + registry + Cognito + optional ECS)
 
-Provisioned today: remote state, VPC, subnets, IGW, optional single NAT, route tables, security group baselines, RDS PostgreSQL (single-AZ, `db.t4g.micro`), and ECR repositories for backend/frontend images.
-ECS is **optional** via `enable_ecs` (default `false`) — control plane is free; cost is the Spot EC2 instance + ALB. When enabled, backend/frontend services and a **public ALB (frontend only)** are created too.
+Provisioned today: remote state, VPC, subnets, IGW, optional single NAT, route tables, security group baselines, RDS PostgreSQL (single-AZ, `db.t4g.micro`), ECR repositories for backend/frontend images, and a **Cognito User Pool** (app client + Hosted UI domain; optional Google IdP when OAuth secrets are set).
+ECS is **optional** via `enable_ecs` (default `false`) — control plane is free; cost is the Spot EC2 instance + ALB. When enabled, backend/frontend services and a **public ALB (frontend only)** are created too; tasks receive Cognito env vars for JWT verification.
 DNS/TLS for **`teacherwang.xyz`** (registered at **Namecheap**; Route 53 + ACM via `alb_domain_name`); HTTPS listeners attach when ECS is on. Not yet provisioned (shown dashed in the target view): CloudFront.
 
 ### High-level AWS account
@@ -20,6 +20,7 @@ flowchart TB
     TF["Terraform operators<br/>(local credentials for now)"]
     S3State["S3 state bucket<br/>teacher-wang-tfstate-&lt;account&gt;<br/>versioned · AES256 · use_lockfile"]
     ECR["ECR repos<br/>backend · frontend"]
+    Cognito["Cognito User Pool<br/>password · optional Google"]
 
     subgraph Region["Region: eu-west-1 (default)"]
       VPC["VPC 10.0.0.0/16"]
@@ -29,7 +30,19 @@ flowchart TB
   TF -->|plan / apply| S3State
   TF --> VPC
   TF --> ECR
+  TF --> Cognito
 ```
+
+### Cognito (end-user identity)
+
+| Setting | Value | Rationale |
+| --- | --- | --- |
+| User pool | `{project}-{env}-users` | Username sign-in; email required + alias |
+| App client | Public SPA (no secret); auth code + PKCE / SRP | React obtains tokens; Flask verifies access JWT |
+| Domain | `{name_prefix}-{account_id}.auth.{region}.amazoncognito.com` | Hosted UI / Google redirect |
+| Google IdP | Optional (`TF_VAR_cognito_google_client_*`) | Password-only until both secrets set |
+| Callbacks | `https://teacherwang.xyz` (+ `/login`) and localhost Vite | Prod + local dev |
+| Cost | ~$0 under early MAU free tier | Matches cost posture |
 
 ### VPC networking
 
@@ -132,7 +145,7 @@ Toggle in `environments/prod/main.tf`. See [`ecs-archi-decision.md`](ecs-archi-d
 | Instance SG | `app` | Tasks/instances can reach RDS on 5432 |
 | Backend task | 512 CPU / 512 MiB, host port 5000 | Fits with frontend on one `t4g.small` |
 | Frontend task | 256 CPU / 256 MiB, host port 8080 | Static/nginx-style container |
-| Env / secrets | `DB_*` + `DB_PASSWORD` from Secrets Manager | Password not in Terraform state or task JSON plaintext |
+| Env / secrets | `DB_*` + `DB_PASSWORD` from Secrets Manager; `COGNITO_*` for JWT | Password not in Terraform state or task JSON plaintext |
 | Logs | `/ecs/.../backend` and `/frontend`, 7-day retention | Cap CloudWatch cost |
 | Insights | Disabled | Avoid CloudWatch ingestion cost |
 
@@ -200,10 +213,14 @@ flowchart TB
   end
 
   ECR["ECR<br/>backend · frontend"]
+  Cognito["Cognito User Pool"]
   SM["Secrets Manager<br/>(RDS master password today)"]
 
+  Users --> Cognito
+  FE -.->|sign-in / tokens| Cognito
   ALB -->|frontend only| FE
   FE -.->|BACKEND_UPSTREAM| BE
+  BE -->|verify JWT JWKS| Cognito
   BE --> RDS
   FE --> ECS
   BE --> ECS
@@ -221,7 +238,7 @@ Each environment directory is a **Terraform root**. Shared resources live in `mo
 
 | Path | Role |
 | --- | --- |
-| `modules/infra` | VPC, NAT, route tables, security groups, state bucket, RDS, ECR, optional ECS + ALB, Route 53 + ACM |
+| `modules/infra` | VPC, NAT, route tables, security groups, state bucket, RDS, ECR, Cognito, optional ECS + ALB, Route 53 + ACM |
 | `environments/common` | Shared defaults module (`project_name`, `aws_region`, `az_count`) |
 | `environments/prod` | Prod root — `cd environments/prod && terraform plan` |
 
@@ -255,6 +272,7 @@ Summary:
 | Single NAT Gateway + EIP | Paid (~$32/mo + data) | Toggle with `enable_nat_gateway`; not needed for current ECS placement |
 | RDS `db.t4g.micro` single-AZ | Paid (~$12–15/mo + storage) | No Multi-AZ / PI / enhanced monitoring |
 | RDS-managed Secrets Manager secret | Paid (~$0.40/mo) | Master password |
+| Cognito User Pool | ~$0 under free-tier MAU | Google IdP optional; no always-on compute |
 | ECR (empty / light use) | Near-free | Storage + data transfer; lifecycle keeps image count low |
 | ECS control plane | **Free** | Why we chose ECS over EKS |
 | ECS Spot `t4g.small` | Paid (~$5–12/mo) when on | Toggle with `enable_ecs` (default off) |

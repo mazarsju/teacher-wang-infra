@@ -174,6 +174,37 @@ variable "alb_domain_name" {
   }
 }
 
+variable "cognito_callback_urls" {
+  description = "Additional OAuth callback URLs for the Cognito app client (localhost defaults included for Vite)"
+  type        = list(string)
+  default = [
+    "http://localhost:5173/",
+    "http://localhost:5173/login",
+  ]
+}
+
+variable "cognito_logout_urls" {
+  description = "Additional OAuth logout URLs for the Cognito app client"
+  type        = list(string)
+  default = [
+    "http://localhost:5173/",
+    "http://localhost:5173/login",
+  ]
+}
+
+variable "cognito_google_client_id" {
+  description = "Google OAuth 2.0 Web client ID for Cognito federation. Null skips Google IdP."
+  type        = string
+  default     = null
+}
+
+variable "cognito_google_client_secret" {
+  description = "Google OAuth 2.0 Web client secret for Cognito federation. Null skips Google IdP."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
 variable "additional_tags" {
   description = "Extra tags merged onto taggable resources (on top of provider default_tags)"
   type        = map(string)

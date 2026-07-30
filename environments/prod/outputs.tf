@@ -243,3 +243,33 @@ output "route53_name_servers" {
   description = "Set these nameservers in Namecheap (Custom DNS) for teacherwang.xyz"
   value       = module.infra.route53_name_servers
 }
+
+output "cognito_user_pool_id" {
+  description = "Cognito User Pool ID"
+  value       = module.infra.cognito_user_pool_id
+}
+
+output "cognito_app_client_id" {
+  description = "Cognito app client ID (public; no secret)"
+  value       = module.infra.cognito_app_client_id
+}
+
+output "cognito_issuer" {
+  description = "OIDC issuer URL for JWT verification"
+  value       = module.infra.cognito_issuer
+}
+
+output "cognito_domain" {
+  description = "Cognito Hosted UI domain prefix"
+  value       = module.infra.cognito_domain
+}
+
+output "cognito_hosted_ui_base_url" {
+  description = "Cognito Hosted UI / OAuth base URL (use …/oauth2/idpresponse as Google redirect)"
+  value       = module.infra.cognito_hosted_ui_base_url
+}
+
+output "cognito_google_enabled" {
+  description = "True when Google IdP is attached to the user pool"
+  value       = module.infra.cognito_google_enabled
+}

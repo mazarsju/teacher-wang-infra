@@ -52,6 +52,9 @@ Implemented in Terraform as `local.name_prefix = "${var.project_name}-${var.envi
 | ALB frontend target group | `teacher-wang-prod-frontend` |
 | Route 53 zone (Name tag) | `teacher-wang-prod-dns` |
 | ACM certificate (Name tag) | `teacher-wang-prod-alb-cert` |
+| Cognito user pool | `teacher-wang-prod-users` |
+| Cognito app client | `teacher-wang-prod-app` |
+| Cognito domain prefix | `teacher-wang-prod-<account_id>` |
 
 ### Exceptions
 

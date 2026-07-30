@@ -39,8 +39,9 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 | Database | **Amazon RDS** PostgreSQL (`db.t4g.micro`, single-AZ) |
 | Frontend delivery | ECS behind ALB at **https://teacherwang.xyz** (ACM + Route 53) |
 | DNS / TLS | **Route 53** hosted zone + free **ACM** cert; HTTP→HTTPS redirect |
+| Identity | **Amazon Cognito** User Pool (password; optional Google IdP) |
 | Secrets (now) | RDS master password in **Secrets Manager** (RDS-managed); broader secrets later |
-| Credentials (now) | Local gitignored `config` file — temporary |
+| Credentials (now) | Local gitignored `config` file — temporary; Google OAuth via `TF_VAR_*` |
 | Cost posture | Cheapest viable defaults (see `agent.md`) |
 
 ### AWS services
@@ -58,6 +59,7 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 - **ALB** — optional with ECS; internet-facing HTTP→HTTPS redirect + HTTPS → frontend only (backend stays off the ALB)
 - **Route 53** — public hosted zone for `teacherwang.xyz` when `alb_domain_name` is set (~$0.50/mo)
 - **ACM** — free public TLS certificate for `teacherwang.xyz` (DNS-validated via Route 53)
+- **Cognito** — User Pool + public app client + Hosted UI domain; optional Google IdP when `TF_VAR_cognito_google_client_*` are set; ECS tasks get `COGNITO_*` env
 
 **Planned**
 
@@ -81,7 +83,7 @@ teacher-wang-infra/
 │   ├── tagging-and-naming.md                 # Resource Name pattern and required tags
 │   └── archived/                             # Obsolete *-archi-decision.md files
 ├── modules/
-│   └── infra/               # Shared module: naming, vpc, SGs, state, rds, ecr, ecs, alb, route53, …
+│   └── infra/               # Shared module: naming, vpc, SGs, state, rds, ecr, cognito, ecs, alb, route53, …
 └── environments/
     ├── common/              # Shared defaults module (project, region, AZ count)
     └── prod/                # Prod root — cd here and run terraform plan/apply
@@ -231,9 +233,32 @@ When enabled, Terraform also creates:
 | Backend | **VPC-local only** (not on the ALB) | 5000 | 512 CPU / 512 MiB |
 
 - Frontend URL: `http://$(terraform output -raw alb_dns_name)`
-- Backend receives `DB_*` / `DB_PASSWORD`; frontend receives `BACKEND_UPSTREAM` (`http://172.17.0.1:5000`) for a same-host reverse proxy (browser must not call the API directly).
+- Backend receives `DB_*` / `DB_PASSWORD` and `COGNITO_*` (pool id, client id, issuer, region); frontend receives `BACKEND_UPSTREAM` (`http://172.17.0.1:5000`) plus public Cognito ids for a future SPA login.
 
 See [`docs/ecs-archi-decision.md`](docs/ecs-archi-decision.md) for why this is preferred over EKS.
+
+### Cognito (end-user identity)
+
+Always provisioned (near-free under Cognito MAU free tier). After apply:
+
+```bash
+cd environments/prod
+terraform output cognito_user_pool_id
+terraform output cognito_app_client_id
+terraform output cognito_issuer
+terraform output cognito_hosted_ui_base_url
+```
+
+**Google SSO (optional):** create a Google Cloud OAuth **Web** client, set redirect URI to  
+`$(terraform output -raw cognito_hosted_ui_base_url)/oauth2/idpresponse`, then:
+
+```bash
+export TF_VAR_cognito_google_client_id="..."
+export TF_VAR_cognito_google_client_secret="..."
+terraform apply
+```
+
+Password auth works without Google. Flask verifies access tokens via JWKS (`GET /auth/me` in the app).
 
 ## Roadmap
 
@@ -274,12 +299,14 @@ App runtime integration (DB connection, reverse-proxy to `BACKEND_UPSTREAM`, COR
 - [x] Route 53 hosted zone + apex alias for `teacherwang.xyz`
 - [x] ACM certificate (DNS validation) and ALB HTTPS listener (HTTP→HTTPS)
 
-### 6. Multi-user auth & data isolation _(decided — implement next)_
+### 6. Multi-user auth & data isolation _(in progress)_
 
 Decision record: [`docs/multi-user-archi-decision.md`](docs/multi-user-archi-decision.md) (Cognito; shared schema + RLS + partitions; shared read-only catalog).
 
 - [x] Choose identity + tenancy + shared-data model
-- [ ] Provision Cognito (user pool, app client, Google IdP) and wire app JWT verification
+- [x] Provision Cognito (user pool, app client, optional Google IdP) and wire `COGNITO_*` into ECS
+- [x] App JWT verification (Cognito JWKS) + `GET /auth/me` probe — in [teacher-wang-app](https://github.com/mazarsju/teacher-wang-app)
+- [ ] Enable Google SSO: set `TF_VAR_cognito_google_client_id` / `_secret` and Google redirect URI
 - [ ] App schema: per-user private tables (`user_id` + RLS + partitions) + shared read-only catalog; `app` / `migrator` DB roles
 
 ### 7. Secrets & CI/CD _(later)_

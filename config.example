@@ -14,3 +14,9 @@ export AWS_DEFAULT_REGION="eu-west-1"
 
 # Optional: use a named profile instead of access keys
 # export AWS_PROFILE="teacher-wang"
+
+# Optional: Google SSO for Cognito (both required to create the Google IdP).
+# After `terraform apply`, set the Google redirect URI to:
+#   $(terraform output -raw cognito_hosted_ui_base_url)/oauth2/idpresponse
+# export TF_VAR_cognito_google_client_id="YOUR_GOOGLE_OAUTH_CLIENT_ID"
+# export TF_VAR_cognito_google_client_secret="YOUR_GOOGLE_OAUTH_CLIENT_SECRET"

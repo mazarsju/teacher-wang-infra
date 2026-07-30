@@ -248,3 +248,43 @@ output "alb_domain_name" {
   value       = var.alb_domain_name
 }
 
+output "cognito_user_pool_id" {
+  description = "Cognito User Pool ID"
+  value       = aws_cognito_user_pool.main.id
+}
+
+output "cognito_user_pool_arn" {
+  description = "Cognito User Pool ARN"
+  value       = aws_cognito_user_pool.main.arn
+}
+
+output "cognito_user_pool_endpoint" {
+  description = "Cognito User Pool endpoint hostname"
+  value       = aws_cognito_user_pool.main.endpoint
+}
+
+output "cognito_app_client_id" {
+  description = "Cognito app client ID (public SPA client; no secret)"
+  value       = aws_cognito_user_pool_client.app.id
+}
+
+output "cognito_issuer" {
+  description = "OIDC issuer URL for JWT verification"
+  value       = local.cognito_issuer
+}
+
+output "cognito_domain" {
+  description = "Cognito Hosted UI domain prefix"
+  value       = aws_cognito_user_pool_domain.main.domain
+}
+
+output "cognito_hosted_ui_base_url" {
+  description = "Base URL for Cognito Hosted UI / OAuth"
+  value       = "https://${aws_cognito_user_pool_domain.main.domain}.auth.${var.aws_region}.amazoncognito.com"
+}
+
+output "cognito_google_enabled" {
+  description = "True when the Google identity provider is configured on the user pool"
+  value       = local.cognito_google_enabled
+}
+
