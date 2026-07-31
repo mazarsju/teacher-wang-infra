@@ -285,6 +285,7 @@ output "cognito_hosted_ui_base_url" {
 
 output "cognito_google_enabled" {
   description = "True when the Google identity provider is configured on the user pool"
-  value       = local.cognito_google_enabled
+  # Derive from the resource, not from sensitive client secret locals (avoids tainting).
+  value = length(aws_cognito_identity_provider.google) > 0
 }
 

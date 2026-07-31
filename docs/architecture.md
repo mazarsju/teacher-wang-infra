@@ -37,12 +37,42 @@ flowchart TB
 
 | Setting | Value | Rationale |
 | --- | --- | --- |
-| User pool | `{project}-{env}-users` | Username sign-in; email required + alias |
+| User pool | `{project}-{env}-users` | Username sign-in; email required |
 | App client | Public SPA (no secret); auth code + PKCE / SRP | React obtains tokens; Flask verifies access JWT |
 | Domain | `{name_prefix}-{account_id}.auth.{region}.amazoncognito.com` | Hosted UI / Google redirect |
 | Google IdP | Optional (`TF_VAR_cognito_google_client_*`) | Password-only until both secrets set |
 | Callbacks | `https://teacherwang.xyz` (+ `/login`) and localhost Vite | Prod + local dev |
 | Cost | ~$0 under early MAU free tier | Matches cost posture |
+
+Sign-in goes to Cognito; API calls carry the access token. The backend never sees passwords — it only verifies JWTs against the pool JWKS.
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant FE as Frontend (React)
+  participant Cognito as Cognito User Pool
+  participant BE as Backend (Flask)
+  participant RDS as RDS PostgreSQL
+
+  User->>FE: Open app / login or sign-up
+  FE->>Cognito: Username+password (or Google SSO)
+  Cognito-->>FE: Access + ID + refresh tokens
+
+  User->>FE: Use the app
+  FE->>BE: API request<br/>Authorization: Bearer access_token
+  BE->>Cognito: Fetch / cache JWKS
+  Cognito-->>BE: Public signing keys
+  BE->>BE: Verify JWT (iss, exp, client_id, signature)
+  alt Token valid
+    BE->>RDS: Query as authenticated user (sub)
+    RDS-->>BE: Data
+    BE-->>FE: 200 + JSON
+  else Missing / invalid token
+    BE-->>FE: 401 Unauthorized
+  end
+```
+
+Public Cognito ids are baked into the frontend image at build time (`VITE_COGNITO_*`); the backend receives `COGNITO_*` from the ECS task definition at runtime. Probe route: `GET /auth/me`.
 
 ### VPC networking
 
