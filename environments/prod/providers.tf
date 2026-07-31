@@ -16,3 +16,13 @@ provider "aws" {
     }
   }
 }
+
+# GCP — use Application Default Credentials from your *personal* Google account:
+#   gcloud auth login mazarsju@gmail.com
+#   gcloud config set account mazarsju@gmail.com
+#   gcloud config set project teacher-wang
+#   gcloud auth application-default login
+provider "google" {
+  project = "teacher-wang"
+  region  = "europe-west1"
+}

@@ -31,7 +31,7 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 | Layer | Choice |
 | --- | --- |
 | IaC | Terraform (>= 1.10) |
-| Cloud | Amazon Web Services (AWS) |
+| Cloud | **AWS** (app hosting) + **GCP** (Google OAuth project for SSO) |
 | Remote state | **S3** with native lock files (`use_lockfile`, no DynamoDB) |
 | Orchestration | **Amazon ECS** on EC2 (Spot Graviton) — not EKS |
 | Containers | **Amazon ECR** (image registry) |
@@ -39,9 +39,10 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 | Database | **Amazon RDS** PostgreSQL (`db.t4g.micro`, single-AZ) |
 | Frontend delivery | ECS behind ALB at **https://teacherwang.xyz** (ACM + Route 53) |
 | DNS / TLS | **Route 53** hosted zone + free **ACM** cert; HTTP→HTTPS redirect |
-| Identity | **Amazon Cognito** User Pool (password; optional Google IdP) |
-| Secrets (now) | RDS master password in **Secrets Manager** (RDS-managed); broader secrets later |
-| Credentials (now) | Local gitignored `config` file — temporary; Google OAuth via `TF_VAR_*` |
+| Identity | **Amazon Cognito** User Pool (password + Google IdP) |
+| Google SSO project | GCP project `teacher-wang` (module.gcp); OAuth Web client via Console |
+| Secrets (now) | RDS master password in **Secrets Manager** (RDS-managed); Google OAuth via `TF_VAR_*` |
+| Credentials (now) | Local gitignored `config` + gcloud ADC for GCP |
 | Cost posture | Cheapest viable defaults (see `agent.md`) |
 
 ### AWS services
@@ -60,6 +61,12 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 - **Route 53** — public hosted zone for `teacherwang.xyz` when `alb_domain_name` is set (~$0.50/mo)
 - **ACM** — free public TLS certificate for `teacherwang.xyz` (DNS-validated via Route 53)
 - **Cognito** — User Pool + public app client + Hosted UI domain; optional Google IdP when `TF_VAR_cognito_google_client_*` are set; ECS tasks get `COGNITO_*` env
+
+**GCP (Google SSO)**
+
+- **Project** `teacher-wang` — created/linked by `module.gcp` with billing account `01FAA2-0A2C47-146756`
+- **APIs** — Resource Manager, Service Usage, IAM, Billing, People (profile attributes)
+- **OAuth Web client** — created once in Console (not API-automatable); checklist via `terraform output gcp_oauth_setup_checklist`
 
 **Planned**
 
@@ -83,13 +90,14 @@ teacher-wang-infra/
 │   ├── tagging-and-naming.md                 # Resource Name pattern and required tags
 │   └── archived/                             # Obsolete *-archi-decision.md files
 ├── modules/
-│   └── infra/               # Shared module: naming, vpc, SGs, state, rds, ecr, cognito, ecs, alb, route53, …
+│   ├── infra/               # AWS: naming, vpc, SGs, state, rds, ecr, cognito, ecs, alb, route53, …
+│   └── gcp/                 # GCP: project, billing, APIs + OAuth Console checklist for Google SSO
 └── environments/
     ├── common/              # Shared defaults module (project, region, AZ count)
     └── prod/                # Prod root — cd here and run terraform plan/apply
         ├── backend.tf
         ├── backend.hcl.example
-        ├── main.tf          # wires module.common + module.infra
+        ├── main.tf          # wires module.common + module.infra + module.gcp
         ├── providers.tf
         ├── versions.tf
         └── outputs.tf
@@ -104,6 +112,7 @@ Add `environments/staging` or `environments/dev` later with the same root layout
 - [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.10 (needed for S3 `use_lockfile`)
 - An AWS account and IAM user/role with permissions to create the resources you plan to manage
 - AWS CLI optional but useful for debugging (`aws sts get-caller-identity`)
+- [gcloud](https://cloud.google.com/sdk/docs/install) for GCP Google SSO (`mazarsju@gmail.com` + ADC)
 
 ### Configure credentials (temporary)
 
@@ -249,30 +258,50 @@ terraform output cognito_issuer
 terraform output cognito_hosted_ui_base_url
 ```
 
-**Google SSO:** Cognito is ready to attach a Google IdP; it stays off until OAuth credentials are set (`cognito_google_enabled` is `false` until then).
+**Google SSO / GCP**
 
-1. Create a **Google Cloud OAuth 2.0 Web application** client ([Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials)).
-2. Authorized JavaScript origins (optional for Hosted UI): `https://teacherwang.xyz`, `http://localhost:5173`
-3. Authorized redirect URI — use the Terraform output (exact value):
+Terraform manages the **GCP project** (`teacher-wang`) + billing + APIs via `module.gcp`.  
+Google no longer allows creating classic OAuth Web clients via API/Terraform — create the client once in Console, then wire secrets into Cognito.
+
+1. Authenticate as **mazarsju@gmail.com** (not a work account):
 
 ```bash
-cd environments/prod
-terraform output -raw cognito_google_redirect_uri
-# → https://teacher-wang-prod-<account>.auth.eu-west-1.amazoncognito.com/oauth2/idpresponse
+gcloud auth login mazarsju@gmail.com
+gcloud config set account mazarsju@gmail.com
+gcloud config set project teacher-wang
+gcloud auth application-default login
 ```
 
-4. Put the client id/secret in `config` (gitignored) and apply:
+2. Apply infra (creates/links GCP project + prints checklist):
 
 ```bash
-# in config (see config.example):
+source ./config
+cd environments/prod
+terraform init   # picks up the google provider
+terraform apply
+terraform output -raw gcp_oauth_setup_checklist
+terraform output -raw cognito_google_redirect_uri
+```
+
+If project `teacher-wang` already exists (typical): leave `gcp_create_project = false` (default).  
+Terraform will **not** try to create it again (avoids `409 alreadyExists`); it only links billing + enables APIs.
+
+To create a *new* project id with Terraform instead: set `gcp_create_project = true`.
+
+3. In Google Cloud Console (credentials page from `gcp_oauth_console_url`):
+   - OAuth consent screen: External, app **Teacher Wang**, support **mazarsju@gmail.com**
+   - OAuth client ID → **Web application**
+   - Redirect URI = `cognito_google_redirect_uri` output (exact)
+   - Origins: `https://teacherwang.xyz`, `http://localhost:5173`
+
+4. Enable Cognito Google IdP:
+
+```bash
 export TF_VAR_cognito_google_client_id="...."
 export TF_VAR_cognito_google_client_secret="...."
-source ./config
-cd environments/prod && terraform apply
+terraform apply
 terraform output cognito_google_enabled   # expect true
 ```
-
-Alternative: store `{"client_id":"...","client_secret":"..."}` in Secrets Manager and set `TF_VAR_cognito_google_oauth_secret_arn`.
 
 Password auth works without Google. Flask verifies access tokens via JWKS (`GET /auth/me` in the app).
 
@@ -322,7 +351,8 @@ Decision record: [`docs/multi-user-archi-decision.md`](docs/multi-user-archi-dec
 - [x] Choose identity + tenancy + shared-data model
 - [x] Provision Cognito (user pool, app client, optional Google IdP) and wire `COGNITO_*` into ECS
 - [x] App JWT verification (Cognito JWKS) + `GET /auth/me` probe — in [teacher-wang-app](https://github.com/mazarsju/teacher-wang-app)
-- [ ] Enable Google SSO: create Google OAuth Web client → set `TF_VAR_cognito_google_client_*` (or secret ARN) → `terraform apply` until `cognito_google_enabled = true`
+- [x] GCP project `teacher-wang` + billing + APIs (`module.gcp`) for Google SSO scaffolding
+- [ ] Create Google OAuth Web client in Console → `TF_VAR_cognito_google_client_*` → `cognito_google_enabled = true`
 - [ ] App schema: per-user private tables (`user_id` + RLS + partitions) + shared read-only catalog; `app` / `migrator` DB roles
 
 ### 7. Secrets & CI/CD _(later)_

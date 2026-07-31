@@ -9,7 +9,6 @@ locals {
   # Public site hostname (Route 53 + ACM). Domain registered at Namecheap; set
   # Namecheap Custom DNS to terraform output route53_name_servers. HTTPS when enable_ecs is true.
   alb_domain_name = "teacherwang.xyz"
-
 }
 
 module "common" {
@@ -28,11 +27,27 @@ module "infra" {
   enable_ecs         = local.enable_ecs
   alb_domain_name    = local.alb_domain_name
 
-  # Google SSO. Set via TF_VAR_cognito_google_client_id / _secret (see config.example),
-  # or pass cognito_google_oauth_secret_arn to an existing Secrets Manager JSON secret.
-  # Redirect URI for Google Cloud Console:
-  #   terraform output -raw cognito_google_redirect_uri
+  # Google SSO. Set via TF_VAR_cognito_google_client_id / _secret after creating
+  # the OAuth Web client in GCP (see module.gcp oauth_setup_checklist output).
   cognito_google_client_id        = var.cognito_google_client_id
   cognito_google_client_secret    = var.cognito_google_client_secret
   cognito_google_oauth_secret_arn = var.cognito_google_oauth_secret_arn
+}
+
+# GCP project already exists (teacher-wang). Terraform manages billing link + APIs only.
+# Set gcp_create_project=true only when creating a brand-new project id.
+module "gcp" {
+  source = "../../modules/gcp"
+
+  project_id                  = var.gcp_project_id
+  project_name                = "Teacher Wang"
+  billing_account             = var.gcp_billing_account
+  support_email               = var.gcp_support_email
+  application_title           = "Teacher Wang"
+  create_project              = var.gcp_create_project
+  cognito_google_redirect_uri = module.infra.cognito_google_redirect_uri
+  authorized_javascript_origins = [
+    "https://${local.alb_domain_name}",
+    "http://localhost:5173",
+  ]
 }

@@ -16,3 +16,27 @@ variable "cognito_google_oauth_secret_arn" {
   type        = string
   default     = null
 }
+
+variable "gcp_project_id" {
+  description = "GCP project ID for Google SSO OAuth client (Console)"
+  type        = string
+  default     = "teacher-wang"
+}
+
+variable "gcp_billing_account" {
+  description = "GCP billing account ID (XXXXXX-XXXXXX-XXXXXX)"
+  type        = string
+  default     = "01FAA2-0A2C47-146756"
+}
+
+variable "gcp_support_email" {
+  description = "OAuth consent screen support email"
+  type        = string
+  default     = "mazarsju@gmail.com"
+}
+
+variable "gcp_create_project" {
+  description = "Create the GCP project with Terraform. Use false when the project already exists (avoids 409 alreadyExists)."
+  type        = bool
+  default     = false
+}

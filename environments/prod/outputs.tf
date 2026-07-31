@@ -283,3 +283,23 @@ output "cognito_google_secret_arn" {
   description = "Secrets Manager ARN when Google creds were seeded via TF_VAR (null otherwise)"
   value       = module.infra.cognito_google_secret_arn
 }
+
+output "gcp_project_id" {
+  description = "GCP project ID used for Google OAuth / SSO"
+  value       = module.gcp.project_id
+}
+
+output "gcp_project_number" {
+  description = "GCP project number"
+  value       = module.gcp.project_number
+}
+
+output "gcp_oauth_console_url" {
+  description = "Google Cloud Console credentials page"
+  value       = module.gcp.oauth_console_url
+}
+
+output "gcp_oauth_setup_checklist" {
+  description = "One-time steps to create the Google OAuth Web client and enable Cognito Google IdP"
+  value       = module.gcp.oauth_setup_checklist
+}

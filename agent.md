@@ -18,6 +18,8 @@ When adding or renaming AWS resources, follow [`docs/tagging-and-naming.md`](doc
 
 `README.md` is the primary source of truth for status and workflow; `docs/architecture.md` is the primary source of truth for system shape; `docs/tagging-and-naming.md` is the primary source of truth for resource names and tags; `docs/*-archi-decision.md` files are the source of truth for locked platform choices.
 
+GCP Google SSO scaffolding lives in `modules/gcp` (project, billing, APIs). Classic OAuth Web clients cannot be created via the Google provider anymore — document Console steps via `gcp_oauth_setup_checklist` and wire secrets into Cognito with `TF_VAR_cognito_google_client_*`.
+
 ## Architecture decision documents
 
 Architecture decisions live under `docs/` as `*-archi-decision.md` files (for example ECS vs EKS, and multi-user auth/tenancy). After any change that affects those areas—container platform, Cognito / identity, tenancy or shared-data model, related Terraform, or project structure—review the matching decision docs and update them so they stay accurate.
