@@ -1,14 +1,15 @@
-# Application Load Balancer — public ingress to the frontend only.
+# Application Load Balancer — ingress to the frontend only.
 #
 # Cost notes:
 # - ALB ~$16/mo + LCU charges whenever enable_ecs is true (destroyed with ECS).
 # - No access logs / WAF yet (extra cost).
-# - HTTPS when alb_domain_name is set (ACM is free; Route 53 zone ~$0.50/mo).
+# - With CloudFront: public HTTPS is on CloudFront; ALB :80 is the CF origin.
+# - ACM (regional) still used for the ALB :443 listener (optional direct access).
 #
 # Security model:
-# - Internet → ALB → frontend target group (host port).
+# - Internet → CloudFront → ALB :80 → frontend target group (host port).
 # - Backend is NOT registered on the ALB (VPC / same-host only).
-# - With HTTPS: :443 terminates TLS; :80 redirects to HTTPS.
+# - Without CloudFront + domain: :80 redirects to HTTPS on the ALB.
 
 resource "aws_lb" "app" {
   count = var.enable_ecs ? 1 : 0
@@ -67,8 +68,10 @@ resource "aws_lb_listener" "http" {
   port              = 80
   protocol          = "HTTP"
 
+  # CloudFront terminates viewer TLS and fetches the origin over HTTP.
+  # Only redirect :80→:443 when the ALB itself is the public HTTPS edge.
   dynamic "default_action" {
-    for_each = local.alb_https_enabled ? [1] : []
+    for_each = local.alb_https_enabled && !local.cloudfront_enabled ? [1] : []
     content {
       type = "redirect"
 
@@ -81,7 +84,7 @@ resource "aws_lb_listener" "http" {
   }
 
   dynamic "default_action" {
-    for_each = local.alb_https_enabled ? [] : [1]
+    for_each = local.alb_https_enabled && !local.cloudfront_enabled ? [] : [1]
     content {
       type             = "forward"
       target_group_arn = aws_lb_target_group.frontend[0].arn

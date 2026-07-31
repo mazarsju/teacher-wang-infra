@@ -4,9 +4,14 @@
 # Naming: AWS `name` and Name tag use the same value ({name_prefix}-{role}).
 #
 # Ingress model:
-# - ALB: 80/443 from the internet
+# - ALB: 80/443 from the internet, or only CloudFront prefix list when CDN is on
 # - App: frontend host port from ALB only; backend host port from the app SG (VPC-local)
 # - DB: 5432 from app SG
+
+data "aws_ec2_managed_prefix_list" "cloudfront_origin" {
+  count = local.cloudfront_enabled ? 1 : 0
+  name  = "com.amazonaws.global.cloudfront.origin-facing"
+}
 
 resource "aws_security_group" "alb" {
   name = "${local.name_prefix}-alb"
@@ -20,7 +25,9 @@ resource "aws_security_group" "alb" {
   })
 }
 
-resource "aws_vpc_security_group_ingress_rule" "alb_http" {
+resource "aws_vpc_security_group_ingress_rule" "alb_http_internet" {
+  count = local.cloudfront_enabled ? 0 : 1
+
   security_group_id = aws_security_group.alb.id
   description       = "HTTP from internet"
   ip_protocol       = "tcp"
@@ -29,13 +36,49 @@ resource "aws_vpc_security_group_ingress_rule" "alb_http" {
   cidr_ipv4         = "0.0.0.0/0"
 }
 
-resource "aws_vpc_security_group_ingress_rule" "alb_https" {
+resource "aws_vpc_security_group_ingress_rule" "alb_https_internet" {
+  count = local.cloudfront_enabled ? 0 : 1
+
   security_group_id = aws_security_group.alb.id
   description       = "HTTPS from internet"
   ip_protocol       = "tcp"
   from_port         = 443
   to_port           = 443
   cidr_ipv4         = "0.0.0.0/0"
+}
+
+# Prior state used unindexed alb_http / alb_https. With CloudFront on, those
+# instances are destroyed (count = 0) and replaced by prefix-list rules below.
+moved {
+  from = aws_vpc_security_group_ingress_rule.alb_http
+  to   = aws_vpc_security_group_ingress_rule.alb_http_internet[0]
+}
+
+moved {
+  from = aws_vpc_security_group_ingress_rule.alb_https
+  to   = aws_vpc_security_group_ingress_rule.alb_https_internet[0]
+}
+
+resource "aws_vpc_security_group_ingress_rule" "alb_http_cloudfront" {
+  count = local.cloudfront_enabled ? 1 : 0
+
+  security_group_id = aws_security_group.alb.id
+  description       = "HTTP from CloudFront origin-facing prefix list"
+  ip_protocol       = "tcp"
+  from_port         = 80
+  to_port           = 80
+  prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront_origin[0].id
+}
+
+resource "aws_vpc_security_group_ingress_rule" "alb_https_cloudfront" {
+  count = local.cloudfront_enabled ? 1 : 0
+
+  security_group_id = aws_security_group.alb.id
+  description       = "HTTPS from CloudFront origin-facing prefix list"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+  prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront_origin[0].id
 }
 
 resource "aws_vpc_security_group_egress_rule" "alb_all" {

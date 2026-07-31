@@ -37,8 +37,8 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 | Containers | **Amazon ECR** (image registry) |
 | Networking | VPC, IGW, single NAT (optional), route tables, security groups, ALB |
 | Database | **Amazon RDS** PostgreSQL (`db.t4g.micro`, single-AZ) |
-| Frontend delivery | ECS behind ALB at **https://teacherwang.xyz** (ACM + Route 53) |
-| DNS / TLS | **Route 53** hosted zone + free **ACM** cert; HTTP→HTTPS redirect |
+| Frontend delivery | ECS behind ALB, public via **CloudFront** at **https://teacherwang.xyz** |
+| DNS / TLS | **Route 53** → CloudFront (ACM us-east-1); ALB is the CDN origin |
 | Identity | **Amazon Cognito** User Pool (password + Google IdP) |
 | Google SSO project | GCP project `teacher-wang` (module.gcp); OAuth Web client via Console |
 | Secrets (now) | RDS master password in **Secrets Manager** (RDS-managed); Google OAuth via `TF_VAR_*` |
@@ -53,13 +53,15 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 - **VPC** — isolated network with public and private subnets across 2 AZs (no auto-assign public IPs)
 - **Internet Gateway** — public subnet default route to the internet
 - **NAT Gateway** — single shared NAT in one public subnet for private outbound (toggle with `enable_nat_gateway`)
-- **Security groups** — baselines for ALB (80/443), app (from ALB), and DB (5432 from app)
+- **Security groups** — ALB (CloudFront prefix list when CDN is on), app (from ALB), and DB (5432 from app)
 - **RDS** — PostgreSQL 16, `db.t4g.micro`, single-AZ, private subnets; master password in Secrets Manager
 - **ECR** — private repos for backend and frontend images (AES256, scan-on-push, lifecycle retention)
 - **ECS** — optional (`enable_ecs`); free control plane + Spot `t4g.small` capacity; backend/frontend task definitions and services (off by default)
-- **ALB** — optional with ECS; internet-facing HTTP→HTTPS redirect + HTTPS → frontend only (backend stays off the ALB)
-- **Route 53** — public hosted zone for `teacherwang.xyz` when `alb_domain_name` is set (~$0.50/mo)
-- **ACM** — free public TLS certificate for `teacherwang.xyz` (DNS-validated via Route 53)
+- **ALB** — optional with ECS; CloudFront origin on :80 → frontend only (backend stays off the ALB)
+- **CloudFront** — apex HTTPS for `teacherwang.xyz`; on ALB 502/503/504 serves a styled maintenance page from S3
+- **S3 (maintenance)** — private bucket + OAC for `maintenance.html` (Welcome Auth–style static page)
+- **Route 53** — public hosted zone for `teacherwang.xyz` when `alb_domain_name` is set (~$0.50/mo); apex → CloudFront
+- **ACM** — free certs for ALB (`eu-west-1`) and CloudFront (`us-east-1`), DNS-validated via Route 53
 - **Cognito** — User Pool + public app client + Hosted UI domain; optional Google IdP when `TF_VAR_cognito_google_client_*` are set; ECS tasks get `COGNITO_*` env
 - **Lambda (Cognito Pre Sign-up)** — enforces unique email; links Google SSO to an existing password user with the same email (`AdminLinkProviderForUser`)
 
@@ -71,7 +73,6 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 
 **Planned**
 
-- **S3 / CloudFront** — static frontend hosting (if not served from ECS)
 - **IAM** — least-privilege roles for Terraform and workloads (ECS instance / execution / task roles exist when ECS is on)
 
 ## Repository structure
@@ -168,7 +169,7 @@ No `-var-file` flags needed: prod values live in `environments/prod/main.tf`; sh
 
 ### Public HTTPS (`teacherwang.xyz`)
 
-Prod sets `alb_domain_name = "teacherwang.xyz"`. The domain is registered at **Namecheap**; Terraform provisions a Route 53 hosted zone and a free ACM certificate. The ALB HTTPS listener and apex alias appear when `enable_ecs = true`.
+Prod sets `alb_domain_name = "teacherwang.xyz"`. The domain is registered at **Namecheap**; Terraform provisions a Route 53 hosted zone and free ACM certificates (regional + `us-east-1` for CloudFront). When `enable_ecs = true`, apex DNS points at CloudFront; the ALB is the origin. ECS deploys that briefly return 502/503/504 show the S3 maintenance page instead of a raw ALB error.
 
 1. Domain **`teacherwang.xyz`** is already registered at Namecheap.
 2. Apply Terraform (zone + ACM validation records can be created even with ECS off):
@@ -239,7 +240,7 @@ When enabled, Terraform also creates:
 
 | Service | Exposure | Host port | Resources |
 | --- | --- | --- | --- |
-| Frontend | **Public** via ALB `:80` → target group | 8080 | 256 CPU / 256 MiB |
+| Frontend | **Public** via CloudFront → ALB `:80` → target group | 8080 | 256 CPU / 256 MiB |
 | Backend | **VPC-local only** (not on the ALB) | 5000 | 512 CPU / 512 MiB |
 
 - Frontend URL: `http://$(terraform output -raw alb_dns_name)`
@@ -345,7 +346,8 @@ App runtime integration (DB connection, reverse-proxy to `BACKEND_UPSTREAM`, COR
 ### 5. Public DNS & TLS
 
 - [x] Route 53 hosted zone + apex alias for `teacherwang.xyz`
-- [x] ACM certificate (DNS validation) and ALB HTTPS listener (HTTP→HTTPS)
+- [x] ACM certificate (DNS validation) and ALB HTTPS listener
+- [x] CloudFront in front of ALB (viewer HTTPS) + S3 maintenance page on origin 5xx
 
 ### 6. Multi-user auth & data isolation _(in progress)_
 
@@ -374,4 +376,3 @@ Decision record: [`docs/multi-user-archi-decision.md`](docs/multi-user-archi-dec
 - [ ] Cost guards, budgets / alerts
 - [ ] Least-privilege IAM review
 - [ ] Additional environments (`staging` / `dev`)
-- [ ] Optional: S3 + CloudFront frontend if leaving ECS

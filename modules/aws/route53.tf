@@ -1,10 +1,10 @@
-# Public DNS (Route 53) + ACM for the ALB hostname.
+# Public DNS (Route 53) + ACM for the public hostname.
 #
 # Cost notes:
 # - Hosted zone ~$0.50/mo + tiny query charges when alb_domain_name is set.
-# - ACM public certificates are free.
-# - Zone/cert stay even if enable_ecs is false (avoids NS churn); HTTPS listener
-#   and apex alias appear only when the ALB exists (alb_https_enabled).
+# - ACM public certificates are free (regional for ALB; us-east-1 for CloudFront).
+# - Zone/cert stay even if enable_ecs is false (avoids NS churn); apex alias
+#   points at CloudFront when ECS + domain are on (cloudfront_enabled).
 #
 # After first apply that creates the zone: in Namecheap set Custom DNS nameservers
 # to route53_name_servers. Certificate validation waits until NS delegate correctly.
@@ -66,16 +66,36 @@ resource "aws_acm_certificate_validation" "alb" {
   }
 }
 
-resource "aws_route53_record" "alb_alias" {
-  count = local.alb_https_enabled ? 1 : 0
+resource "aws_route53_record" "apex" {
+  count = local.cloudfront_enabled ? 1 : 0
 
   zone_id = aws_route53_zone.app[0].zone_id
   name    = var.alb_domain_name
   type    = "A"
 
   alias {
-    name                   = aws_lb.app[0].dns_name
-    zone_id                = aws_lb.app[0].zone_id
-    evaluate_target_health = true
+    name                   = aws_cloudfront_distribution.app[0].domain_name
+    zone_id                = aws_cloudfront_distribution.app[0].hosted_zone_id
+    evaluate_target_health = false
   }
+}
+
+resource "aws_route53_record" "apex_ipv6" {
+  count = local.cloudfront_enabled ? 1 : 0
+
+  zone_id = aws_route53_zone.app[0].zone_id
+  name    = var.alb_domain_name
+  type    = "AAAA"
+
+  alias {
+    name                   = aws_cloudfront_distribution.app[0].domain_name
+    zone_id                = aws_cloudfront_distribution.app[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# Legacy name kept as a moved target so existing state migrates cleanly.
+moved {
+  from = aws_route53_record.alb_alias
+  to   = aws_route53_record.apex
 }

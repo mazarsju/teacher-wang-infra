@@ -229,6 +229,26 @@ output "alb_acm_certificate_arn" {
   value       = module.aws.alb_acm_certificate_arn
 }
 
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID (null when CDN is off)"
+  value       = module.aws.cloudfront_distribution_id
+}
+
+output "cloudfront_domain_name" {
+  description = "CloudFront domain name (null when CDN is off)"
+  value       = module.aws.cloudfront_domain_name
+}
+
+output "cloudfront_maintenance_bucket" {
+  description = "S3 bucket for the deploy maintenance HTML page"
+  value       = module.aws.cloudfront_maintenance_bucket
+}
+
+output "cloudfront_acm_certificate_arn" {
+  description = "us-east-1 ACM cert ARN for CloudFront (null when CDN is off)"
+  value       = module.aws.cloudfront_acm_certificate_arn
+}
+
 output "alb_domain_name" {
   description = "Configured public domain"
   value       = module.aws.alb_domain_name

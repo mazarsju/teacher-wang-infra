@@ -10,4 +10,6 @@ locals {
   alb_domain_configured = var.alb_domain_name != null && var.alb_domain_name != ""
   # HTTPS listener + apex alias require both a domain and a live ALB (ECS on).
   alb_https_enabled = var.enable_ecs && local.alb_domain_configured
+  # Public DNS → CloudFront → ALB; S3 holds the deploy maintenance page.
+  cloudfront_enabled = local.alb_https_enabled
 }

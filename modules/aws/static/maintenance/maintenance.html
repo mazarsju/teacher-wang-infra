@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Teacher Wang — Maintenance</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --welcome-mist: #d8ece8;
+        --welcome-accent: #e8a54b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: Manrope, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(ellipse 80% 60% at 10% 20%, #2a7a7a 0%, transparent 55%),
+          radial-gradient(ellipse 70% 50% at 90% 80%, #1e4d6b 0%, transparent 50%),
+          linear-gradient(160deg, #0a2433 0%, #134455 45%, #1a5c5c 100%);
+      }
+
+      .page {
+        position: relative;
+        isolation: isolate;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1.25rem;
+        overflow: hidden;
+      }
+
+      .glyph {
+        position: absolute;
+        right: -4%;
+        bottom: -8%;
+        z-index: 0;
+        font-family: Fraunces, Georgia, serif;
+        font-size: clamp(14rem, 42vw, 28rem);
+        font-weight: 700;
+        line-height: 1;
+        color: rgba(216, 236, 232, 0.08);
+        user-select: none;
+        pointer-events: none;
+        animation: drift 18s ease-in-out infinite alternate;
+      }
+
+      .content {
+        position: relative;
+        z-index: 1;
+        width: min(100%, 26rem);
+        text-align: center;
+        animation: rise 0.7s ease-out both;
+      }
+
+      .status {
+        margin: 0 0 1rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--welcome-accent);
+        text-shadow: 0 1px 12px rgba(0, 0, 0, 0.2);
+      }
+
+      .brand {
+        margin: 0 0 0.85rem;
+        font-family: Fraunces, Georgia, serif;
+        font-size: clamp(2.5rem, 8vw, 3.5rem);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: #f7faf8;
+        text-shadow: 0 2px 24px rgba(0, 0, 0, 0.25);
+      }
+
+      .tagline {
+        margin: 0 auto;
+        max-width: 22rem;
+        font-size: 1.05rem;
+        font-weight: 400;
+        line-height: 1.55;
+        color: var(--welcome-mist);
+      }
+
+      .hint {
+        margin: 1.25rem auto 0;
+        max-width: 22rem;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        color: rgba(216, 236, 232, 0.72);
+      }
+
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes drift {
+        from {
+          transform: translate3d(0, 0, 0) rotate(-2deg);
+        }
+        to {
+          transform: translate3d(-2%, -3%, 0) rotate(2deg);
+        }
+      }
+
+      @media (max-width: 480px) {
+        .page {
+          align-items: flex-start;
+          padding-top: 2.5rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="glyph" aria-hidden="true">学</div>
+      <div class="content" role="status">
+        <p class="status">Page under maintenance</p>
+        <p class="brand">Teacher Wang</p>
+        <p class="tagline">
+          Practice Mandarin with characters you already know — chat, track your
+          knowledge base, and grow toward the next HSK level.
+        </p>
+        <p class="hint">
+          We’re doing a quick update. Please refresh in a minute or two — thanks
+          for waiting.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

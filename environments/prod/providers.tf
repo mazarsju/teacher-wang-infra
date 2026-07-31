@@ -17,6 +17,20 @@ provider "aws" {
   }
 }
 
+# CloudFront viewer certificates must be requested in us-east-1.
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  default_tags {
+    tags = {
+      Project     = "teacher-wang"
+      ManagedBy   = "terraform"
+      Environment = "prod"
+    }
+  }
+}
+
 # GCP — use Application Default Credentials from your *personal* Google account:
 #   gcloud auth login mazarsju@gmail.com
 #   gcloud config set account mazarsju@gmail.com

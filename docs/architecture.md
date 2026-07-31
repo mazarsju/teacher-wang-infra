@@ -6,11 +6,11 @@ Update this file whenever components are added, removed, or rewired.
 Platform decision (ECS vs EKS): [`ecs-archi-decision.md`](ecs-archi-decision.md).  
 Multi-user auth / tenancy / shared data: [`multi-user-archi-decision.md`](multi-user-archi-decision.md).
 
-## Current state (networking + data + registry + Cognito + optional ECS)
+## Current state (networking + data + registry + Cognito + optional ECS + CloudFront)
 
 Provisioned today: remote state, VPC, subnets, IGW, optional single NAT, route tables, security group baselines, RDS PostgreSQL (single-AZ, `db.t4g.micro`), ECR repositories for backend/frontend images, and a **Cognito User Pool** (app client + Hosted UI domain; optional Google IdP when OAuth secrets are set).
-ECS is **optional** via `enable_ecs` (default `false`) — control plane is free; cost is the Spot EC2 instance + ALB. When enabled, backend/frontend services and a **public ALB (frontend only)** are created too; tasks receive Cognito env vars for JWT verification.
-DNS/TLS for **`teacherwang.xyz`** (registered at **Namecheap**; Route 53 + ACM via `alb_domain_name`); HTTPS listeners attach when ECS is on. Not yet provisioned (shown dashed in the target view): CloudFront.
+ECS is **optional** via `enable_ecs` (default `false`) — control plane is free; cost is the Spot EC2 instance + ALB. When enabled, backend/frontend services, a **public ALB (frontend only)**, and **CloudFront** (apex DNS + deploy maintenance page) are created too; tasks receive Cognito env vars for JWT verification.
+DNS/TLS for **`teacherwang.xyz`** (registered at **Namecheap**; Route 53 + ACM via `alb_domain_name`); public HTTPS is on CloudFront when ECS is on.
 
 ### High-level AWS account
 
@@ -21,6 +21,7 @@ flowchart TB
     S3State["S3 state bucket<br/>teacher-wang-tfstate-&lt;account&gt;<br/>versioned · AES256 · use_lockfile"]
     ECR["ECR repos<br/>backend · frontend"]
     Cognito["Cognito User Pool<br/>password · optional Google<br/>+ Pre Sign-up Lambda"]
+    CF["CloudFront + maintenance S3<br/>(when ECS + domain)"]
 
     subgraph Region["Region: eu-west-1 (default)"]
       VPC["VPC 10.0.0.0/16"]
@@ -31,6 +32,7 @@ flowchart TB
   TF --> VPC
   TF --> ECR
   TF --> Cognito
+  TF --> CF
 ```
 
 ### Cognito (end-user identity)
@@ -167,13 +169,15 @@ Traffic is constrained by SG references (not CIDR between tiers).
 ```mermaid
 flowchart LR
   Users((Users / Internet))
+  CF[CloudFront]
 
-  SGALB["SG: alb<br/>ingress 80, 443 from 0.0.0.0/0"]
+  SGALB["SG: alb<br/>80/443 from CF prefix list"]
   SGApp["SG: app"]
   SGDb["SG: db<br/>ingress 5432 from app SG"]
   RDS[(RDS PostgreSQL)]
 
-  Users -->|HTTP| SGALB
+  Users -->|HTTPS| CF
+  CF -->|HTTP origin| SGALB
   SGALB -->|frontend host port only| SGApp
   SGApp -->|backend host port<br/>VPC-local| SGApp
   SGApp --> SGDb
@@ -182,7 +186,7 @@ flowchart LR
 
 | Security group | Purpose | Ingress | Egress |
 | --- | --- | --- | --- |
-| `alb` | Public ALB | TCP 80, 443 from internet | all |
+| `alb` | ALB (CloudFront origin) | TCP 80, 443 from CloudFront prefix list | all |
 | `app` | ECS instances / tasks | Frontend host port from `alb`; backend host port from `app` (VPC-local) | all |
 | `db` | RDS PostgreSQL | TCP 5432 from `app` | none defined |
 
@@ -227,21 +231,37 @@ Toggle in `environments/prod/main.tf`. See [`ecs-archi-decision.md`](ecs-archi-d
 
 | Setting | Value | Rationale |
 | --- | --- | --- |
-| Scheme | Internet-facing | Public web UI only |
+| Scheme | Internet-facing (origin for CloudFront) | Public web UI only via CDN |
 | Domain | `teacherwang.xyz` (Namecheap; `alb_domain_name`) | Cheap `.xyz` + Route 53 |
-| Listener HTTP `:80` | Redirect → HTTPS when domain set; else forward | Force secure context for browsers / AnkiConnect |
-| Listener HTTPS `:443` | ACM cert → frontend TG | Free public ACM certificate |
+| Listener HTTP `:80` | Forward → frontend TG (CloudFront origin) | Viewer TLS terminates at CloudFront |
+| Listener HTTPS `:443` | Regional ACM → frontend TG | Kept for completeness; SG limited to CloudFront |
 | Frontend TG | Instance targets, host port 8080 | Bridge-mode ECS |
 | Backend | Not registered on ALB | API stays VPC-local; frontend should reverse-proxy via `BACKEND_UPSTREAM` |
+| SG ingress | CloudFront managed prefix list | Block direct internet → ALB bypass |
 | Access logs | Off | Avoid S3 log storage cost |
+
+### CloudFront + maintenance page (with `enable_ecs` + domain)
+
+| Setting | Value | Rationale |
+| --- | --- | --- |
+| Distribution | `{project}-{env}-cdn` | Apex `teacherwang.xyz` → CDN |
+| Default origin | ALB DNS name, HTTP :80 | Avoid second hostname/cert for origin TLS |
+| Error pages | S3 `…-maintenance-<account>` + OAC | `/maintenance.html` on origin 502/503/504 |
+| Error cache TTL | 30s | Short so the site recovers quickly after deploy |
+| Viewer cert | ACM in **us-east-1** | CloudFront requirement (free) |
+| Price class | `PriceClass_100` (NA + EU) | Enough for this audience; cheaper |
+| Cost | ~$0 under Free / always-free allowances | Hobby traffic stays in free tier |
+
+During single-host ECS deploys (`min_healthy=0`), the ALB has no healthy targets and returns 503. CloudFront serves the Teacher Wang–styled maintenance HTML instead of the raw ALB error page. Source: `modules/aws/static/maintenance/maintenance.html`.
 
 ### DNS / TLS (`alb_domain_name`)
 
 | Setting | Value | Rationale |
 | --- | --- | --- |
 | Route 53 zone | Apex `teacherwang.xyz` | ~$0.50/mo; automatic ACM validation + alias |
-| ACM | DNS-validated, same region as ALB | Free; required for trusted HTTPS |
-| Apex record | Alias `A` → ALB | Only while `enable_ecs` is true |
+| ACM (ALB) | DNS-validated, `eu-west-1` | Free; ALB :443 |
+| ACM (CloudFront) | DNS-validated, `us-east-1` | Free; viewer HTTPS |
+| Apex records | Alias `A`/`AAAA` → CloudFront | Only while `enable_ecs` is true |
 | Registrar | **Namecheap** — Custom DNS → `route53_name_servers` | One-time after zone create |
 
 ### Terraform remote state
@@ -262,19 +282,20 @@ Shows how upcoming pieces attach to what is already in place.
 flowchart TB
   Users((Users))
 
-  CF["CloudFront + S3<br/>(frontend — optional later)"]
   R53["Route 53<br/>teacherwang.xyz"]
+  CF["CloudFront<br/>HTTPS + maintenance errors"]
+  MaintS3["S3 maintenance.html<br/>OAC private"]
 
   Users --> R53
-  R53 --> ALB
-  Users --> ALB
-  Users -.-> CF
+  R53 --> CF
+  CF -->|default · HTTP :80| ALB
+  CF -->|502/503/504| MaintS3
 
   subgraph VPC["VPC"]
-    ALB["ALB · public<br/>SG alb · :80→:443 · HTTPS"]
+    ALB["ALB · CloudFront origin<br/>SG: CF prefix list"]
 
     subgraph Public["Public subnets"]
-      FE["ECS frontend<br/>public via ALB"]
+      FE["ECS frontend<br/>via ALB"]
       BE["ECS backend<br/>VPC-local only"]
       ECS["Spot EC2 capacity<br/>toggle: enable_ecs"]
     end
@@ -301,10 +322,9 @@ flowchart TB
   ECS --> ECR
   BE -.-> SM
   RDS -.-> SM
-  CF -.->|optional| ALB
 ```
 
-ECS + ALB are created together when `enable_ecs = true` (default off).
+ECS + ALB + CloudFront are created together when `enable_ecs = true` and `alb_domain_name` is set.
 
 ## Environments
 
@@ -312,7 +332,7 @@ Each environment directory is a **Terraform root**. Shared resources live in `mo
 
 | Path | Role |
 | --- | --- |
-| `modules/aws` | VPC, NAT, route tables, security groups, state bucket, RDS, ECR, Cognito, optional ECS + ALB, Route 53 + ACM |
+| `modules/aws` | VPC, NAT, route tables, security groups, state bucket, RDS, ECR, Cognito, optional ECS + ALB + CloudFront, Route 53 + ACM |
 | `modules/gcp` | GCP project, billing link, APIs, OAuth Console checklist for Google SSO |
 | `environments/common` | Shared defaults module (`project_name`, `aws_region`, `az_count`) |
 | `environments/prod` | Prod root — `cd environments/prod && terraform plan` |
@@ -353,9 +373,10 @@ Summary:
 | ECR (empty / light use) | Near-free | Storage + data transfer; lifecycle keeps image count low |
 | ECS control plane | **Free** | Why we chose ECS over EKS |
 | ECS Spot `t4g.small` | Paid (~$5–12/mo) when on | Toggle with `enable_ecs` (default off) |
-| ALB (with ECS) | Paid (~$16/mo + LCU) when on | Public frontend only; destroyed with `enable_ecs` |
+| ALB (with ECS) | Paid (~$16/mo + LCU) when on | CloudFront origin; destroyed with `enable_ecs` |
+| CloudFront + maintenance S3 | ~$0 under free allowances | Custom 502/503/504 → maintenance.html |
 | Route 53 hosted zone | ~$0.50/mo when `alb_domain_name` set | `teacherwang.xyz` (Namecheap registration) |
-| ACM public cert | Free | DNS-validated for the ALB hostname |
+| ACM public certs | Free | ALB (`eu-west-1`) + CloudFront (`us-east-1`) |
 | ECS task logs (7-day retention) | Low | `/ecs/…/backend` and `/frontend` |
 | Public IPv4 on ECS instances | ~$3.6/mo each when associated | Public subnet placement (no NAT) |
 | EKS control plane | Avoided (~$73/mo) | See [`ecs-archi-decision.md`](ecs-archi-decision.md) |

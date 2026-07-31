@@ -233,6 +233,26 @@ output "alb_acm_certificate_arn" {
   value       = try(aws_acm_certificate.alb[0].arn, null)
 }
 
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID (null when CloudFront is off)"
+  value       = try(aws_cloudfront_distribution.app[0].id, null)
+}
+
+output "cloudfront_domain_name" {
+  description = "CloudFront domain name (null when CloudFront is off)"
+  value       = try(aws_cloudfront_distribution.app[0].domain_name, null)
+}
+
+output "cloudfront_maintenance_bucket" {
+  description = "S3 bucket for the deploy maintenance page (null when CloudFront is off)"
+  value       = try(aws_s3_bucket.maintenance[0].id, null)
+}
+
+output "cloudfront_acm_certificate_arn" {
+  description = "us-east-1 ACM certificate ARN used by CloudFront (null when off)"
+  value       = try(aws_acm_certificate.cloudfront[0].arn, null)
+}
+
 output "route53_zone_id" {
   description = "Route 53 hosted zone ID for alb_domain_name (null when unset)"
   value       = try(aws_route53_zone.app[0].zone_id, null)

@@ -6,8 +6,8 @@ locals {
   enable_nat_gateway = false
   # ECS control plane is free; cost is the EC2 Spot instance. Keep false when idle.
   enable_ecs = true
-  # Public site hostname (Route 53 + ACM). Domain registered at Namecheap; set
-  # Namecheap Custom DNS to terraform output route53_name_servers. HTTPS when enable_ecs is true.
+  # Public site hostname (Route 53 + ACM + CloudFront). Domain registered at Namecheap; set
+  # Namecheap Custom DNS to terraform output route53_name_servers. CDN when enable_ecs is true.
   alb_domain_name = "teacherwang.xyz"
 }
 
@@ -18,6 +18,11 @@ module "common" {
 # Renamed from module.infra → module.aws (state migrated via moved block below).
 module "aws" {
   source = "../../modules/aws"
+
+  providers = {
+    aws           = aws
+    aws.us_east_1 = aws.us_east_1
+  }
 
   project_name       = module.common.project_name
   aws_region         = module.common.aws_region
