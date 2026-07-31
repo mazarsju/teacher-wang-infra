@@ -17,6 +17,13 @@ config
 **/*_override.tf.json
 *.tfplan
 
+# Generated Lambda zip artifacts
+modules/**/lambda/**/*.zip
+
+# Python
+**/__pycache__/
+*.py[cod]
+
 # OS / editor
 .DS_Store
 .idea/

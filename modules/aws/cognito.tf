@@ -106,6 +106,11 @@ resource "aws_cognito_user_pool" "main" {
     allow_admin_create_user_only = false
   }
 
+  # Unique email + Google→existing-user linking (see cognito_pre_signup.tf).
+  lambda_config {
+    pre_sign_up = aws_lambda_function.cognito_pre_signup.arn
+  }
+
   # Default Cognito email (no SES charge). Switch to SES later if volume needs it.
   email_configuration {
     email_sending_account = "COGNITO_DEFAULT"

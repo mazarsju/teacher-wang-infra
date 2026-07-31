@@ -61,6 +61,7 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 - **Route 53** — public hosted zone for `teacherwang.xyz` when `alb_domain_name` is set (~$0.50/mo)
 - **ACM** — free public TLS certificate for `teacherwang.xyz` (DNS-validated via Route 53)
 - **Cognito** — User Pool + public app client + Hosted UI domain; optional Google IdP when `TF_VAR_cognito_google_client_*` are set; ECS tasks get `COGNITO_*` env
+- **Lambda (Cognito Pre Sign-up)** — enforces unique email; links Google SSO to an existing password user with the same email (`AdminLinkProviderForUser`)
 
 **GCP (Google SSO)**
 
@@ -304,6 +305,8 @@ terraform output cognito_google_enabled   # expect true
 ```
 
 Password auth works without Google. Flask verifies access tokens via JWKS (`GET /auth/me` in the app).
+
+**Same email = same user:** a Pre Sign-up Lambda rejects duplicate emails on classic sign-up and, when Google SSO uses an email that already exists, links Google to that Cognito user (`AdminLinkProviderForUser`) instead of creating a second profile. The Cognito `sub` stays the original user’s. The first Google attempt after linking may fail with `EXTERNAL_PROVIDER_LINKED` — sign in with Google once more. If a stray `Google_*` user was created before this Lambda existed, delete that orphan in the Cognito console.
 
 ## Roadmap
 

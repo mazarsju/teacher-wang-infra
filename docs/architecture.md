@@ -20,7 +20,7 @@ flowchart TB
     TF["Terraform operators<br/>(local credentials for now)"]
     S3State["S3 state bucket<br/>teacher-wang-tfstate-&lt;account&gt;<br/>versioned · AES256 · use_lockfile"]
     ECR["ECR repos<br/>backend · frontend"]
-    Cognito["Cognito User Pool<br/>password · optional Google"]
+    Cognito["Cognito User Pool<br/>password · optional Google<br/>+ Pre Sign-up Lambda"]
 
     subgraph Region["Region: eu-west-1 (default)"]
       VPC["VPC 10.0.0.0/16"]
@@ -40,9 +40,12 @@ flowchart TB
 | User pool | `{project}-{env}-users` | Username sign-in; email required |
 | App client | Public SPA (no secret); auth code + PKCE / SRP | React obtains tokens; Flask verifies access JWT |
 | Domain | `{name_prefix}-{account_id}.auth.{region}.amazoncognito.com` | Hosted UI / Google redirect |
-| Google IdP | Off until `TF_VAR_cognito_google_client_*` or secret ARN set | Password-only today; see README Cognito / GCP section |
+| Google IdP | When `TF_VAR_cognito_google_client_*` or secret ARN set | Password + Google SSO |
 | Google redirect | `cognito_google_redirect_uri` output | Paste into Google Cloud OAuth Web client |
-| GCP project | `teacher-wang` (`module.gcp`) | Billing `01FAA2-0A2C47-146756`; OAuth client still Console-once |
+| Unique email / account link | Pre Sign-up Lambda (`…-cognito-pre-signup`) | Same email → same Cognito user for password + Google |
+| Callbacks | `https://teacherwang.xyz` (+ `/login`) and localhost Vite | Prod + local dev |
+| Cost | ~$0 under early MAU free tier; Lambda cheap | Matches cost posture |
+| GCP project | `teacher-wang` (`module.gcp`) | Billing linked; OAuth Web client Console-once |
 
 ### GCP (Google SSO scaffolding)
 
@@ -54,8 +57,24 @@ flowchart LR
   OAuth -->|client id/secret TF_VAR| CognitoIdP[Cognito Google IdP]
   GCPproj --> You
 ```
-| Callbacks | `https://teacherwang.xyz` (+ `/login`) and localhost Vite | Prod + local dev |
-| Cost | ~$0 under early MAU free tier | Matches cost posture |
+
+```mermaid
+flowchart LR
+  User([User]) --> FE[Frontend]
+  FE -->|password sign-up / sign-in| Pool[Cognito User Pool]
+  FE -->|Google SSO| Pool
+  Google[Google IdP] -.->|optional| Pool
+  Pool -->|Pre Sign-up trigger| Lambda["Lambda<br/>…-cognito-pre-signup"]
+  Lambda -->|ListUsers · AdminLinkProviderForUser| Pool
+  FE -->|Bearer access_token| BE[Backend]
+  BE -->|JWKS verify| Pool
+```
+
+Email identity rules (Pre Sign-up Lambda):
+
+1. Classic sign-up with an email that already exists → rejected (`EMAIL_EXISTS`).
+2. Google SSO with an email that already has a password user → `AdminLinkProviderForUser`, no second Cognito profile. First Google attempt after linking may return `EXTERNAL_PROVIDER_LINKED`; retry Google sign-in (same Cognito `sub` thereafter).
+3. Google SSO for a brand-new email → create user as usual (auto-confirm / auto-verify email).
 
 Sign-in goes to Cognito; API calls carry the access token. The backend never sees passwords — it only verifies JWTs against the pool JWKS.
 
@@ -64,12 +83,24 @@ sequenceDiagram
   actor User
   participant FE as Frontend (React)
   participant Cognito as Cognito User Pool
+  participant Lambda as Pre Sign-up Lambda
   participant BE as Backend (Flask)
   participant RDS as RDS PostgreSQL
 
   User->>FE: Open app / login or sign-up
-  FE->>Cognito: Username+password (or Google SSO)
-  Cognito-->>FE: Access + ID + refresh tokens
+  FE->>Cognito: Username+password sign-up or Google SSO
+  Cognito->>Lambda: Pre Sign-up trigger
+  alt Email already used (classic sign-up)
+    Lambda-->>Cognito: Reject EMAIL_EXISTS
+    Cognito-->>FE: Sign-up error
+  else Google email matches existing user
+    Lambda->>Cognito: AdminLinkProviderForUser
+    Lambda-->>Cognito: Abort EXTERNAL_PROVIDER_LINKED
+    Note over FE,Cognito: Retry Google once → same sub
+  else New email / normal path
+    Lambda-->>Cognito: Allow (auto-confirm if Google)
+    Cognito-->>FE: Access + ID + refresh tokens
+  end
 
   User->>FE: Use the app
   FE->>BE: API request<br/>Authorization: Bearer access_token

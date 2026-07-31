@@ -299,3 +299,8 @@ output "cognito_google_secret_arn" {
   value       = try(aws_secretsmanager_secret.cognito_google[0].arn, null)
 }
 
+output "cognito_pre_signup_lambda_name" {
+  description = "Pre Sign-up Lambda that enforces unique email and links Google SSO to existing users"
+  value       = aws_lambda_function.cognito_pre_signup.function_name
+}
+

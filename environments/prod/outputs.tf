@@ -284,6 +284,11 @@ output "cognito_google_secret_arn" {
   value       = module.aws.cognito_google_secret_arn
 }
 
+output "cognito_pre_signup_lambda_name" {
+  description = "Pre Sign-up Lambda for unique email + Google account linking"
+  value       = module.aws.cognito_pre_signup_lambda_name
+}
+
 output "gcp_project_id" {
   description = "GCP project ID used for Google OAuth / SSO"
   value       = module.gcp.project_id
