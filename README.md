@@ -41,7 +41,7 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 | DNS / TLS | **Route 53** → CloudFront (ACM us-east-1); ALB is the CDN origin |
 | Identity | **Amazon Cognito** User Pool (password + Google IdP) |
 | Google SSO project | GCP project `teacher-wang` (module.gcp); OAuth Web client via Console |
-| Secrets (now) | RDS master password in **Secrets Manager** (RDS-managed); Google OAuth via `TF_VAR_*` |
+| Secrets (now) | RDS master password + **LLM API key** in **Secrets Manager**; Google OAuth via `TF_VAR_*` |
 | Credentials (now) | Local gitignored `config` + gcloud ADC for GCP |
 | Cost posture | Cheapest viable defaults (see `agent.md`) |
 
@@ -64,6 +64,7 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 - **Route 53** — public hosted zone for `teacherwang.xyz` when `alb_domain_name` is set (~$0.50/mo); apex → CloudFront
 - **ACM** — free certs for ALB (`eu-west-1`) and CloudFront (`us-east-1`), DNS-validated via Route 53
 - **Cognito** — User Pool + public app client + Hosted UI domain; optional Google IdP when `TF_VAR_cognito_google_client_*` are set; ECS tasks get `COGNITO_*` env
+- **Secrets Manager** — RDS master password (RDS-managed); optional Google OAuth JSON; **LLM API key** (`TF_VAR_llm_api_key`) injected into the backend task as `LLM_API_KEY`
 - **Lambda (Cognito Pre Sign-up)** — enforces unique email; links Google SSO to an existing password user with the same email (`AdminLinkProviderForUser`)
 
 **GCP (Google SSO)**
@@ -84,7 +85,7 @@ teacher-wang-infra/
 ├── README.md                # Source of truth for status, stack, and layout
 ├── .gitignore               # Ignores local secrets, Terraform state, OS junk
 ├── .cursor/skills/          # Cursor agent skills (e.g. tf state lock recovery)
-├── config.example           # Template for local AWS credentials
+├── config.example           # Template for local AWS / LLM / Google TF_VAR secrets
 ├── config                   # Your secrets (gitignored) — copy from config.example
 ├── docs/
 │   ├── architecture.md                       # Living system overview (current + planned)
@@ -93,7 +94,7 @@ teacher-wang-infra/
 │   ├── tagging-and-naming.md                 # Resource Name pattern and required tags
 │   └── archived/                             # Obsolete *-archi-decision.md files
 ├── modules/
-│   ├── aws/                 # AWS: naming, vpc, SGs, state, rds, ecr, cognito, ecs, alb, route53, …
+│   ├── aws/                 # AWS: naming, vpc, SGs, state, rds, ecr, cognito, llm, ecs, alb, …
 │   └── gcp/                 # GCP: project, billing, APIs + OAuth Console checklist for Google SSO
 └── environments/
     ├── common/              # Shared defaults module (project, region, AZ count)
@@ -310,6 +311,21 @@ Password auth works without Google. Flask verifies access tokens via JWKS (`GET 
 
 **Same email = same user:** a Pre Sign-up Lambda rejects duplicate emails on classic sign-up and, when Google SSO uses an email that already exists, links Google to that Cognito user (`AdminLinkProviderForUser`) instead of creating a second profile. The Cognito `sub` stays the original user’s. The first Google attempt after linking may fail with `EXTERNAL_PROVIDER_LINKED` — sign in with Google once more. If a stray `Google_*` user was created before this Lambda existed, delete that orphan in the Cognito console.
 
+### Backend LLM secrets
+
+The backend task gets `LLM_MODEL` as a plain env var (default `gpt-4o-mini`) and `LLM_API_KEY` from Secrets Manager.
+
+```bash
+# In gitignored `config` (see config.example), then:
+source ./config
+export TF_VAR_llm_api_key="sk-...."
+# optional: export TF_VAR_llm_model="gpt-4o-mini"
+cd environments/prod
+terraform apply
+```
+
+Alternative: create the secret yourself and set `TF_VAR_llm_api_key_secret_arn` instead of the key value.
+
 ## Roadmap
 
 ### 1. Repository & AWS bootstrap
@@ -364,7 +380,7 @@ Decision record: [`docs/multi-user-archi-decision.md`](docs/multi-user-archi-dec
 ### 7. Secrets & CI/CD _(later)_
 
 - [ ] Replace local `config` keys with IAM roles / AWS SSO / OIDC
-- [ ] Store app secrets in Secrets Manager or SSM
+- [x] Store app secrets in Secrets Manager (`LLM_API_KEY`; RDS + Google OAuth already)
 - [ ] Pipeline to build images, push to ECR, and apply Terraform / deploy
 
 ### 8. Observability _(later)_

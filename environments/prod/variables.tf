@@ -17,6 +17,25 @@ variable "cognito_google_oauth_secret_arn" {
   default     = null
 }
 
+variable "llm_api_key" {
+  description = "LLM provider API key for the backend. Prefer TF_VAR_llm_api_key; stored in Secrets Manager."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "llm_api_key_secret_arn" {
+  description = "Optional Secrets Manager ARN for a plain-string LLM API key (alternative to TF_VAR_llm_api_key)."
+  type        = string
+  default     = null
+}
+
+variable "llm_model" {
+  description = "LLM model id for the backend (LLM_MODEL env). Override with TF_VAR_llm_model if needed."
+  type        = string
+  default     = "gpt-4o-mini"
+}
+
 variable "gcp_project_id" {
   description = "GCP project ID for Google SSO OAuth client (Console)"
   type        = string

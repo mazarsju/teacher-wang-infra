@@ -32,3 +32,11 @@ export AWS_DEFAULT_REGION="eu-west-1"
 # export TF_VAR_cognito_google_client_secret="YOUR_GOOGLE_OAUTH_CLIENT_SECRET"
 # Alternative: Secrets Manager JSON {"client_id":"...","client_secret":"..."}
 # export TF_VAR_cognito_google_oauth_secret_arn="arn:aws:secretsmanager:..."
+
+# --- Backend LLM ----------------------------------------------------------------
+# API key → Secrets Manager → ECS task secret LLM_API_KEY.
+# Model → plain Terraform env LLM_MODEL on the backend task (default gpt-4o-mini).
+# export TF_VAR_llm_api_key="YOUR_LLM_API_KEY"
+# export TF_VAR_llm_model="gpt-4o-mini"
+# Alternative: existing Secrets Manager plain-string secret
+# export TF_VAR_llm_api_key_secret_arn="arn:aws:secretsmanager:..."

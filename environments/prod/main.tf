@@ -38,6 +38,12 @@ module "aws" {
   cognito_google_client_id        = var.cognito_google_client_id
   cognito_google_client_secret    = var.cognito_google_client_secret
   cognito_google_oauth_secret_arn = var.cognito_google_oauth_secret_arn
+
+  # Backend LLM. Seed the API key via TF_VAR_llm_api_key (Secrets Manager);
+  # model is a non-secret env var (override with TF_VAR_llm_model if needed).
+  llm_api_key            = var.llm_api_key
+  llm_api_key_secret_arn = var.llm_api_key_secret_arn
+  llm_model              = var.llm_model
 }
 
 # GCP project already exists (teacher-wang). Terraform manages billing link + APIs only.

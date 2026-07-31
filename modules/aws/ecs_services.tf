@@ -51,6 +51,18 @@ data "aws_iam_policy_document" "ecs_task_execution_secrets" {
       aws_db_instance.main.master_user_secret[0].secret_arn,
     ]
   }
+
+  dynamic "statement" {
+    for_each = local.llm_api_key_secret_arn != null ? [1] : []
+
+    content {
+      sid     = "ReadLlmApiKeySecret"
+      actions = ["secretsmanager:GetSecretValue"]
+      resources = [
+        local.llm_api_key_secret_arn,
+      ]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
@@ -130,14 +142,23 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "CONVERSATION_LOGS_BACKEND", value = "s3" },
         { name = "CONVERSATION_LOGS_S3_BUCKET", value = aws_s3_bucket.conversation_logs.id },
         { name = "CONVERSATION_LOGS_S3_REGION", value = var.aws_region },
+        { name = "LLM_MODEL", value = var.llm_model },
       ]
 
-      secrets = local.ecs_db_password_secret_arn == null ? [] : [
-        {
-          name      = "DB_PASSWORD"
-          valueFrom = local.ecs_db_password_secret_arn
-        }
-      ]
+      secrets = concat(
+        local.ecs_db_password_secret_arn == null ? [] : [
+          {
+            name      = "DB_PASSWORD"
+            valueFrom = local.ecs_db_password_secret_arn
+          }
+        ],
+        local.llm_api_key_secret_arn == null ? [] : [
+          {
+            name      = "LLM_API_KEY"
+            valueFrom = local.llm_api_key_secret_arn
+          }
+        ],
+      )
 
       logConfiguration = {
         logDriver = "awslogs"

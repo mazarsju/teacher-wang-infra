@@ -314,6 +314,17 @@ output "cognito_google_secret_arn" {
   value       = module.aws.cognito_google_secret_arn
 }
 
+output "llm_api_key_secret_arn" {
+  description = "Secrets Manager ARN for the LLM API key when configured (null otherwise)"
+  value       = module.aws.llm_api_key_secret_arn
+  sensitive   = true
+}
+
+output "llm_model" {
+  description = "LLM model id passed to the backend as LLM_MODEL"
+  value       = module.aws.llm_model
+}
+
 output "cognito_pre_signup_lambda_name" {
   description = "Pre Sign-up Lambda for unique email + Google account linking"
   value       = module.aws.cognito_pre_signup_lambda_name

@@ -211,6 +211,25 @@ variable "cognito_google_oauth_secret_arn" {
   default     = null
 }
 
+variable "llm_api_key" {
+  description = "LLM provider API key for the backend. Prefer TF_VAR_llm_api_key; stored in Secrets Manager and injected into the ECS task. Null skips the secret (unless llm_api_key_secret_arn is set)."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "llm_api_key_secret_arn" {
+  description = "Optional Secrets Manager secret ARN for a plain-string LLM API key. Alternative to TF_VAR_llm_api_key."
+  type        = string
+  default     = null
+}
+
+variable "llm_model" {
+  description = "LLM model id passed to the backend as LLM_MODEL (non-secret env)."
+  type        = string
+  default     = "gpt-4o-mini"
+}
+
 variable "additional_tags" {
   description = "Extra tags merged onto taggable resources (on top of provider default_tags)"
   type        = map(string)
