@@ -290,7 +290,9 @@ resource "aws_ecs_service" "frontend" {
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
 
-  # Same as backend: force past stuck DRAINING so the fixed service name can be reused.
+  # Force=true lets DeleteService proceed when tasks are still running. Terraform
+  # still waits for INACTIVE; keep LB listener rules alive until that finishes
+  # (see depends_on) or the service can stay DRAINING until the 45m timeout.
   force_delete = true
 
   capacity_provider_strategy {
@@ -319,9 +321,14 @@ resource "aws_ecs_service" "frontend" {
     Tier = "private"
   })
 
+  # Destroy this service before ALB listener rules that forward to its TG.
+  # Without that edge, enable_ecs=false destroys rules in parallel, detaches the
+  # TG mid-drain (LoadBalancerArns=[]), and the service can stick in DRAINING.
   depends_on = [
     aws_ecs_cluster_capacity_providers.main,
     aws_lb_listener.http,
     aws_lb_listener.https,
+    aws_lb_listener_rule.http_cloudfront_origin,
+    aws_lb_listener_rule.https_cloudfront_origin,
   ]
 }

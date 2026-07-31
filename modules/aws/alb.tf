@@ -56,7 +56,9 @@ resource "aws_lb_target_group" "frontend" {
     unhealthy_threshold = 3
   }
 
-  deregistration_delay = 30
+  # Keep short: enable_ecs toggles tear the service down often; a long drain is
+  # the main reason DeleteService sits in DRAINING until Terraform's 45m timeout.
+  deregistration_delay = 10
 
   tags = merge(local.resource_tags, {
     Name = "${local.name_prefix}-frontend"
