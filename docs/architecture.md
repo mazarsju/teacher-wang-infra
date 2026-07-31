@@ -9,7 +9,7 @@ Multi-user auth / tenancy / shared data: [`multi-user-archi-decision.md`](multi-
 ## Current state (networking + data + registry + Cognito + optional ECS + CloudFront)
 
 Provisioned today: remote state, VPC, subnets, IGW, optional single NAT, route tables, security group baselines, RDS PostgreSQL (single-AZ, `db.t4g.micro`), ECR repositories for backend/frontend images, and a **Cognito User Pool** (app client + Hosted UI domain; optional Google IdP when OAuth secrets are set).
-ECS is **optional** via `enable_ecs` (default `false`) — control plane is free; cost is the Spot EC2 instance + ALB. When enabled, backend/frontend services, a **public ALB (frontend only)**, and **CloudFront** (apex DNS + deploy maintenance page) are created too; tasks receive Cognito env vars for JWT verification.
+ECS is **optional** via `enable_ecs` (default `false`) — control plane is free; cost is the Spot EC2 instance + ALB. When enabled, backend/frontend services, a **public ALB (frontend only)**, and **CloudFront** (apex DNS + deploy maintenance page) are created too; tasks receive Cognito env vars for JWT verification plus `CONVERSATION_LOGS_*` pointing at the private conversation-logs S3 bucket (`users/{cognito_sub}/…`).
 DNS/TLS for **`teacherwang.xyz`** (registered at **Namecheap**; Route 53 + ACM via `alb_domain_name`); public HTTPS is on CloudFront when ECS is on.
 
 ### High-level AWS account
@@ -22,6 +22,7 @@ flowchart TB
     ECR["ECR repos<br/>backend · frontend"]
     Cognito["Cognito User Pool<br/>password · optional Google<br/>+ Pre Sign-up Lambda"]
     CF["CloudFront + maintenance S3<br/>(when ECS + domain)"]
+    ChatS3["S3 conversation logs<br/>teacher-wang-prod-conversation-logs-&lt;account&gt;"]
 
     subgraph Region["Region: eu-west-1 (default)"]
       VPC["VPC 10.0.0.0/16"]
@@ -33,6 +34,7 @@ flowchart TB
   TF --> ECR
   TF --> Cognito
   TF --> CF
+  TF --> ChatS3
 ```
 
 ### Cognito (end-user identity)

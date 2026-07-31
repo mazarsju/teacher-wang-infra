@@ -248,6 +248,16 @@ output "cloudfront_maintenance_bucket" {
   value       = try(aws_s3_bucket.maintenance[0].id, null)
 }
 
+output "conversation_logs_bucket" {
+  description = "S3 bucket for per-user chat transcripts"
+  value       = aws_s3_bucket.conversation_logs.id
+}
+
+output "conversation_logs_bucket_arn" {
+  description = "ARN of the conversation-logs S3 bucket"
+  value       = aws_s3_bucket.conversation_logs.arn
+}
+
 output "cloudfront_acm_certificate_arn" {
   description = "us-east-1 ACM certificate ARN used by CloudFront (null when off)"
   value       = try(aws_acm_certificate.cloudfront[0].arn, null)

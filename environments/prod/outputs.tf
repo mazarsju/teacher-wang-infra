@@ -244,6 +244,16 @@ output "cloudfront_maintenance_bucket" {
   value       = module.aws.cloudfront_maintenance_bucket
 }
 
+output "conversation_logs_bucket" {
+  description = "S3 bucket for per-user chat transcripts"
+  value       = module.aws.conversation_logs_bucket
+}
+
+output "conversation_logs_bucket_arn" {
+  description = "ARN of the conversation-logs S3 bucket"
+  value       = module.aws.conversation_logs_bucket_arn
+}
+
 output "cloudfront_acm_certificate_arn" {
   description = "us-east-1 ACM cert ARN for CloudFront (null when CDN is off)"
   value       = module.aws.cloudfront_acm_certificate_arn

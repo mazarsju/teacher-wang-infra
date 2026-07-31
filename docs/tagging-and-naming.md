@@ -52,6 +52,7 @@ Implemented in Terraform as `local.name_prefix = "${var.project_name}-${var.envi
 | ALB frontend target group | `teacher-wang-prod-frontend` |
 | CloudFront distribution (Name tag) | `teacher-wang-prod-cdn` |
 | Maintenance S3 bucket | `teacher-wang-prod-maintenance-<account_id>` |
+| Conversation logs S3 bucket | `teacher-wang-prod-conversation-logs-<account_id>` |
 | Route 53 zone (Name tag) | `teacher-wang-prod-dns` |
 | ACM certificate ALB (Name tag) | `teacher-wang-prod-alb-cert` |
 | ACM certificate CloudFront (Name tag) | `teacher-wang-prod-cloudfront-cert` (us-east-1) |

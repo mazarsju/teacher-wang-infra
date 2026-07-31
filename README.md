@@ -60,6 +60,7 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 - **ALB** — optional with ECS; CloudFront origin on :80 → frontend only (backend stays off the ALB)
 - **CloudFront** — apex HTTPS for `teacherwang.xyz`; on ALB 502/503/504 serves a styled maintenance page from S3
 - **S3 (maintenance)** — private bucket + OAC for `maintenance.html` (Welcome Auth–style static page)
+- **S3 (conversation logs)** — private bucket for per-user chat transcripts (`users/{cognito_sub}/…`); ECS task role can read/write objects under `users/`
 - **Route 53** — public hosted zone for `teacherwang.xyz` when `alb_domain_name` is set (~$0.50/mo); apex → CloudFront
 - **ACM** — free certs for ALB (`eu-west-1`) and CloudFront (`us-east-1`), DNS-validated via Route 53
 - **Cognito** — User Pool + public app client + Hosted UI domain; optional Google IdP when `TF_VAR_cognito_google_client_*` are set; ECS tasks get `COGNITO_*` env

@@ -74,7 +74,7 @@ data "aws_iam_policy_document" "ecs_task_assume" {
   }
 }
 
-# Application task role (expand later for S3, etc.). Distinct from execution role.
+# Application task role (S3 conversation logs via conversation_logs.tf). Distinct from execution role.
 resource "aws_iam_role" "ecs_task" {
   count = var.enable_ecs ? 1 : 0
 
@@ -127,6 +127,9 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "COGNITO_USER_POOL_ID", value = aws_cognito_user_pool.main.id },
         { name = "COGNITO_APP_CLIENT_ID", value = aws_cognito_user_pool_client.app.id },
         { name = "COGNITO_ISSUER", value = local.cognito_issuer },
+        { name = "CONVERSATION_LOGS_BACKEND", value = "s3" },
+        { name = "CONVERSATION_LOGS_S3_BUCKET", value = aws_s3_bucket.conversation_logs.id },
+        { name = "CONVERSATION_LOGS_S3_REGION", value = var.aws_region },
       ]
 
       secrets = local.ecs_db_password_secret_arn == null ? [] : [
