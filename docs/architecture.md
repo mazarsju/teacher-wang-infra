@@ -277,11 +277,12 @@ ECS + ALB are created together when `enable_ecs = true` (default off).
 
 ## Environments
 
-Each environment directory is a **Terraform root**. Shared resources live in `modules/infra`; shared defaults live in `environments/common`.
+Each environment directory is a **Terraform root**. Shared resources live in `modules/aws`; shared defaults live in `environments/common`.
 
 | Path | Role |
 | --- | --- |
-| `modules/infra` | VPC, NAT, route tables, security groups, state bucket, RDS, ECR, Cognito, optional ECS + ALB, Route 53 + ACM |
+| `modules/aws` | VPC, NAT, route tables, security groups, state bucket, RDS, ECR, Cognito, optional ECS + ALB, Route 53 + ACM |
+| `modules/gcp` | GCP project, billing link, APIs, OAuth Console checklist for Google SSO |
 | `environments/common` | Shared defaults module (`project_name`, `aws_region`, `az_count`) |
 | `environments/prod` | Prod root — `cd environments/prod && terraform plan` |
 
@@ -289,10 +290,12 @@ Each environment directory is a **Terraform root**. Shared resources live in `mo
 flowchart LR
   ProdRoot["environments/prod<br/>terraform plan / apply"]
   Common["environments/common<br/>shared defaults"]
-  Infra["modules/infra<br/>AWS resources"]
+  AWS["modules/aws<br/>AWS resources"]
+  GCP["modules/gcp<br/>GCP Google SSO"]
 
   ProdRoot --> Common
-  ProdRoot --> Infra
+  ProdRoot --> AWS
+  ProdRoot --> GCP
 ```
 
 Add `environments/staging` or `environments/dev` later by copying the `prod` root layout.
@@ -303,7 +306,7 @@ See [`tagging-and-naming.md`](tagging-and-naming.md).
 
 Summary:
 
-- **Names:** `{project}-{environment}-{role}[-qualifier]` via `local.name_prefix` in `modules/infra`
+- **Names:** `{project}-{environment}-{role}[-qualifier]` via `local.name_prefix` in `modules/aws`
 - **Required tags (provider default_tags):** `Project`, `Environment`, `ManagedBy`
 - **Resource tags:** `Name` (always), `Tier` (`public` / `private` / `data` / `shared`)
 

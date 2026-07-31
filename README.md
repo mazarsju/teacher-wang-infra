@@ -90,14 +90,14 @@ teacher-wang-infra/
 │   ├── tagging-and-naming.md                 # Resource Name pattern and required tags
 │   └── archived/                             # Obsolete *-archi-decision.md files
 ├── modules/
-│   ├── infra/               # AWS: naming, vpc, SGs, state, rds, ecr, cognito, ecs, alb, route53, …
+│   ├── aws/                 # AWS: naming, vpc, SGs, state, rds, ecr, cognito, ecs, alb, route53, …
 │   └── gcp/                 # GCP: project, billing, APIs + OAuth Console checklist for Google SSO
 └── environments/
     ├── common/              # Shared defaults module (project, region, AZ count)
     └── prod/                # Prod root — cd here and run terraform plan/apply
         ├── backend.tf
         ├── backend.hcl.example
-        ├── main.tf          # wires module.common + module.infra + module.gcp
+        ├── main.tf          # wires module.common + module.aws + module.gcp
         ├── providers.tf
         ├── versions.tf
         └── outputs.tf

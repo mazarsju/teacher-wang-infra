@@ -15,8 +15,9 @@ module "common" {
   source = "../common"
 }
 
-module "infra" {
-  source = "../../modules/infra"
+# Renamed from module.infra → module.aws (state migrated via moved block below).
+module "aws" {
+  source = "../../modules/aws"
 
   project_name       = module.common.project_name
   aws_region         = module.common.aws_region
@@ -45,9 +46,15 @@ module "gcp" {
   support_email               = var.gcp_support_email
   application_title           = "Teacher Wang"
   create_project              = var.gcp_create_project
-  cognito_google_redirect_uri = module.infra.cognito_google_redirect_uri
+  cognito_google_redirect_uri = module.aws.cognito_google_redirect_uri
   authorized_javascript_origins = [
     "https://${local.alb_domain_name}",
     "http://localhost:5173",
   ]
+}
+
+# Preserve existing remote state addresses after modules/infra → modules/aws rename.
+moved {
+  from = module.infra
+  to   = module.aws
 }

@@ -20,7 +20,7 @@ This is a **conventions** doc, not an architecture decision record. Platform cho
 | `role` | short resource purpose | `vpc`, `alb`, `nat`, `public` |
 | `qualifier` | optional (AZ, suffix) | `eu-west-1a`, `eip`, `rt` |
 
-Implemented in Terraform as `local.name_prefix = "${var.project_name}-${var.environment}"` in `modules/infra/naming.tf`.
+Implemented in Terraform as `local.name_prefix = "${var.project_name}-${var.environment}"` in `modules/aws/naming.tf`.
 
 ### Examples
 
