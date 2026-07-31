@@ -1,15 +1,35 @@
-# Amazon Cognito User Pool — end-user credentials (password + optional Google SSO).
+# Amazon Cognito User Pool — end-user credentials (password + Google SSO).
 #
 # Cost: ~$0 under Cognito free-tier MAU (Lite/Essentials). No always-on compute.
-# Google IdP is created only when both client id and secret are set.
+# Google IdP is created when either:
+#   - TF_VAR_cognito_google_client_id + TF_VAR_cognito_google_client_secret are set, or
+#   - cognito_google_oauth_secret_arn points at a Secrets Manager secret
+#     with JSON {"client_id":"...","client_secret":"..."}
+# Redirect URI to register in Google Cloud Console (also terraform output):
+#   ${cognito_hosted_ui_base_url}/oauth2/idpresponse
 
 locals {
-  cognito_google_enabled = (
+  cognito_google_from_vars = (
     var.cognito_google_client_id != null &&
     var.cognito_google_client_id != "" &&
     var.cognito_google_client_secret != null &&
     var.cognito_google_client_secret != ""
   )
+
+  cognito_google_from_secret_arn = (
+    var.cognito_google_oauth_secret_arn != null &&
+    var.cognito_google_oauth_secret_arn != ""
+  )
+
+  cognito_google_enabled = local.cognito_google_from_vars || local.cognito_google_from_secret_arn
+
+  cognito_google_creds = local.cognito_google_from_vars ? {
+    client_id     = var.cognito_google_client_id
+    client_secret = var.cognito_google_client_secret
+    } : local.cognito_google_from_secret_arn ? {
+    client_id     = jsondecode(data.aws_secretsmanager_secret_version.cognito_google[0].secret_string)["client_id"]
+    client_secret = jsondecode(data.aws_secretsmanager_secret_version.cognito_google[0].secret_string)["client_secret"]
+  } : null
 
   cognito_identity_providers = concat(
     ["COGNITO"],
@@ -18,6 +38,10 @@ locals {
 
   # Prefix must be unique per region; include account id to avoid collisions.
   cognito_domain_prefix = "${local.name_prefix}-${data.aws_caller_identity.current.account_id}"
+
+  cognito_hosted_ui_base_url = "https://${aws_cognito_user_pool_domain.main.domain}.auth.${var.aws_region}.amazoncognito.com"
+
+  cognito_google_redirect_uri = "${local.cognito_hosted_ui_base_url}/oauth2/idpresponse"
 
   cognito_callback_urls = distinct(concat(
     var.cognito_callback_urls,
@@ -98,6 +122,37 @@ resource "aws_cognito_user_pool_domain" "main" {
   user_pool_id = aws_cognito_user_pool.main.id
 }
 
+# Persist Google OAuth client credentials when provided via TF_VAR (ops / rotation).
+# ~$0.40/mo only while Google SSO is enabled this way.
+resource "aws_secretsmanager_secret" "cognito_google" {
+  count = local.cognito_google_from_vars ? 1 : 0
+
+  name                    = "${local.name_prefix}-cognito-google"
+  description             = "Google OAuth Web client for Cognito IdP (JSON client_id + client_secret)"
+  recovery_window_in_days = 0
+
+  tags = merge(local.resource_tags, {
+    Name = "${local.name_prefix}-cognito-google"
+    Tier = "shared"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "cognito_google" {
+  count = local.cognito_google_from_vars ? 1 : 0
+
+  secret_id = aws_secretsmanager_secret.cognito_google[0].id
+  secret_string = jsonencode({
+    client_id     = var.cognito_google_client_id
+    client_secret = var.cognito_google_client_secret
+  })
+}
+
+data "aws_secretsmanager_secret_version" "cognito_google" {
+  count = local.cognito_google_from_secret_arn && !local.cognito_google_from_vars ? 1 : 0
+
+  secret_id = var.cognito_google_oauth_secret_arn
+}
+
 resource "aws_cognito_identity_provider" "google" {
   count = local.cognito_google_enabled ? 1 : 0
 
@@ -106,15 +161,31 @@ resource "aws_cognito_identity_provider" "google" {
   provider_type = "Google"
 
   provider_details = {
-    client_id                     = var.cognito_google_client_id
-    client_secret                 = var.cognito_google_client_secret
+    client_id                     = local.cognito_google_creds.client_id
+    client_secret                 = local.cognito_google_creds.client_secret
     authorize_scopes              = "openid email profile"
     attributes_url_add_attributes = "true"
   }
 
   attribute_mapping = {
-    email    = "email"
-    username = "sub"
+    email       = "email"
+    username    = "sub"
+    name        = "name"
+    given_name  = "given_name"
+    family_name = "family_name"
+    picture     = "picture"
+  }
+
+  # Cognito fills authorize_url / token_url / etc. after create; ignore to avoid perpetual diffs.
+  lifecycle {
+    ignore_changes = [
+      provider_details["attributes_url"],
+      provider_details["authorize_url"],
+      provider_details["token_url"],
+      provider_details["oidc_issuer"],
+      provider_details["jwks_uri"],
+      provider_details["attributes_request_method"],
+    ]
   }
 }
 

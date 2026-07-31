@@ -280,12 +280,22 @@ output "cognito_domain" {
 
 output "cognito_hosted_ui_base_url" {
   description = "Base URL for Cognito Hosted UI / OAuth"
-  value       = "https://${aws_cognito_user_pool_domain.main.domain}.auth.${var.aws_region}.amazoncognito.com"
+  value       = local.cognito_hosted_ui_base_url
+}
+
+output "cognito_google_redirect_uri" {
+  description = "Authorized redirect URI to paste into the Google Cloud OAuth Web client"
+  value       = local.cognito_google_redirect_uri
 }
 
 output "cognito_google_enabled" {
   description = "True when the Google identity provider is configured on the user pool"
   # Derive from the resource, not from sensitive client secret locals (avoids tainting).
   value = length(aws_cognito_identity_provider.google) > 0
+}
+
+output "cognito_google_secret_arn" {
+  description = "Secrets Manager ARN for Google OAuth creds when seeded via TF_VAR (null otherwise)"
+  value       = try(aws_secretsmanager_secret.cognito_google[0].arn, null)
 }
 

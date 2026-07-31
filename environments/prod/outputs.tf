@@ -265,11 +265,21 @@ output "cognito_domain" {
 }
 
 output "cognito_hosted_ui_base_url" {
-  description = "Cognito Hosted UI / OAuth base URL (use …/oauth2/idpresponse as Google redirect)"
+  description = "Cognito Hosted UI / OAuth base URL"
   value       = module.infra.cognito_hosted_ui_base_url
+}
+
+output "cognito_google_redirect_uri" {
+  description = "Paste this as Authorized redirect URI in the Google Cloud OAuth Web client"
+  value       = module.infra.cognito_google_redirect_uri
 }
 
 output "cognito_google_enabled" {
   description = "True when Google IdP is attached to the user pool"
   value       = module.infra.cognito_google_enabled
+}
+
+output "cognito_google_secret_arn" {
+  description = "Secrets Manager ARN when Google creds were seeded via TF_VAR (null otherwise)"
+  value       = module.infra.cognito_google_secret_arn
 }

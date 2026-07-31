@@ -40,7 +40,8 @@ flowchart TB
 | User pool | `{project}-{env}-users` | Username sign-in; email required |
 | App client | Public SPA (no secret); auth code + PKCE / SRP | React obtains tokens; Flask verifies access JWT |
 | Domain | `{name_prefix}-{account_id}.auth.{region}.amazoncognito.com` | Hosted UI / Google redirect |
-| Google IdP | Optional (`TF_VAR_cognito_google_client_*`) | Password-only until both secrets set |
+| Google IdP | Off until `TF_VAR_cognito_google_client_*` or secret ARN set | Password-only today; see README Cognito section |
+| Google redirect | `cognito_google_redirect_uri` output | Paste into Google Cloud OAuth Web client |
 | Callbacks | `https://teacherwang.xyz` (+ `/login`) and localhost Vite | Prod + local dev |
 | Cost | ~$0 under early MAU free tier | Matches cost posture |
 

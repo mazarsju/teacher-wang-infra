@@ -10,3 +10,9 @@ variable "cognito_google_client_secret" {
   default     = null
   sensitive   = true
 }
+
+variable "cognito_google_oauth_secret_arn" {
+  description = "Optional Secrets Manager secret ARN with JSON client_id/client_secret (alternative to TF_VAR pair)."
+  type        = string
+  default     = null
+}

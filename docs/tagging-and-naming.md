@@ -55,6 +55,7 @@ Implemented in Terraform as `local.name_prefix = "${var.project_name}-${var.envi
 | Cognito user pool | `teacher-wang-prod-users` |
 | Cognito app client | `teacher-wang-prod-app` |
 | Cognito domain prefix | `teacher-wang-prod-<account_id>` |
+| Cognito Google OAuth secret (when enabled via TF_VAR) | `teacher-wang-prod-cognito-google` |
 
 ### Exceptions
 

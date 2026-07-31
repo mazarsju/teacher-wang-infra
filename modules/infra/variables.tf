@@ -193,16 +193,22 @@ variable "cognito_logout_urls" {
 }
 
 variable "cognito_google_client_id" {
-  description = "Google OAuth 2.0 Web client ID for Cognito federation. Null skips Google IdP."
+  description = "Google OAuth 2.0 Web client ID for Cognito federation. Null skips Google IdP (unless cognito_google_oauth_secret_arn is set)."
   type        = string
   default     = null
 }
 
 variable "cognito_google_client_secret" {
-  description = "Google OAuth 2.0 Web client secret for Cognito federation. Null skips Google IdP."
+  description = "Google OAuth 2.0 Web client secret for Cognito federation. Null skips Google IdP (unless cognito_google_oauth_secret_arn is set)."
   type        = string
   default     = null
   sensitive   = true
+}
+
+variable "cognito_google_oauth_secret_arn" {
+  description = "Optional Secrets Manager secret ARN with JSON {\"client_id\":\"...\",\"client_secret\":\"...\"} for Cognito Google IdP. Alternative to TF_VAR client id/secret."
+  type        = string
+  default     = null
 }
 
 variable "additional_tags" {

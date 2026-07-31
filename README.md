@@ -249,14 +249,30 @@ terraform output cognito_issuer
 terraform output cognito_hosted_ui_base_url
 ```
 
-**Google SSO (optional):** create a Google Cloud OAuth **Web** client, set redirect URI to  
-`$(terraform output -raw cognito_hosted_ui_base_url)/oauth2/idpresponse`, then:
+**Google SSO:** Cognito is ready to attach a Google IdP; it stays off until OAuth credentials are set (`cognito_google_enabled` is `false` until then).
+
+1. Create a **Google Cloud OAuth 2.0 Web application** client ([Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials)).
+2. Authorized JavaScript origins (optional for Hosted UI): `https://teacherwang.xyz`, `http://localhost:5173`
+3. Authorized redirect URI — use the Terraform output (exact value):
 
 ```bash
-export TF_VAR_cognito_google_client_id="..."
-export TF_VAR_cognito_google_client_secret="..."
-terraform apply
+cd environments/prod
+terraform output -raw cognito_google_redirect_uri
+# → https://teacher-wang-prod-<account>.auth.eu-west-1.amazoncognito.com/oauth2/idpresponse
 ```
+
+4. Put the client id/secret in `config` (gitignored) and apply:
+
+```bash
+# in config (see config.example):
+export TF_VAR_cognito_google_client_id="...."
+export TF_VAR_cognito_google_client_secret="...."
+source ./config
+cd environments/prod && terraform apply
+terraform output cognito_google_enabled   # expect true
+```
+
+Alternative: store `{"client_id":"...","client_secret":"..."}` in Secrets Manager and set `TF_VAR_cognito_google_oauth_secret_arn`.
 
 Password auth works without Google. Flask verifies access tokens via JWKS (`GET /auth/me` in the app).
 
@@ -306,7 +322,7 @@ Decision record: [`docs/multi-user-archi-decision.md`](docs/multi-user-archi-dec
 - [x] Choose identity + tenancy + shared-data model
 - [x] Provision Cognito (user pool, app client, optional Google IdP) and wire `COGNITO_*` into ECS
 - [x] App JWT verification (Cognito JWKS) + `GET /auth/me` probe — in [teacher-wang-app](https://github.com/mazarsju/teacher-wang-app)
-- [ ] Enable Google SSO: set `TF_VAR_cognito_google_client_id` / `_secret` and Google redirect URI
+- [ ] Enable Google SSO: create Google OAuth Web client → set `TF_VAR_cognito_google_client_*` (or secret ARN) → `terraform apply` until `cognito_google_enabled = true`
 - [ ] App schema: per-user private tables (`user_id` + RLS + partitions) + shared read-only catalog; `app` / `migrator` DB roles
 
 ### 7. Secrets & CI/CD _(later)_

@@ -28,9 +28,11 @@ module "infra" {
   enable_ecs         = local.enable_ecs
   alb_domain_name    = local.alb_domain_name
 
-  # Google SSO (optional). Set via TF_VAR_cognito_google_client_id / _secret
-  # (see config.example). Redirect URI after apply:
-  #   ${cognito_hosted_ui_base_url}/oauth2/idpresponse
-  cognito_google_client_id     = var.cognito_google_client_id
-  cognito_google_client_secret = var.cognito_google_client_secret
+  # Google SSO. Set via TF_VAR_cognito_google_client_id / _secret (see config.example),
+  # or pass cognito_google_oauth_secret_arn to an existing Secrets Manager JSON secret.
+  # Redirect URI for Google Cloud Console:
+  #   terraform output -raw cognito_google_redirect_uri
+  cognito_google_client_id        = var.cognito_google_client_id
+  cognito_google_client_secret    = var.cognito_google_client_secret
+  cognito_google_oauth_secret_arn = var.cognito_google_oauth_secret_arn
 }
