@@ -4,6 +4,7 @@
 # ACM for CloudFront must live in us-east-1 (provider alias aws.us_east_1).
 #
 # Path: browser → CloudFront (HTTPS) → ALB :80 → ECS frontend.
+# CloudFront adds X-Origin-Verify; ALB listener rules require it (blocks ALB DNS bypass).
 # When the ALB returns 502/503/504 (e.g. single-host ECS deploy gap), CloudFront
 # serves /maintenance.html from a private S3 bucket (OAC).
 
@@ -168,6 +169,11 @@ resource "aws_cloudfront_distribution" "app" {
       origin_protocol_policy = "http-only"
       origin_ssl_protocols   = ["TLSv1.2"]
     }
+
+    custom_header {
+      name  = "X-Origin-Verify"
+      value = random_password.cloudfront_origin_verify[0].result
+    }
   }
 
   origin {
@@ -227,6 +233,7 @@ resource "aws_cloudfront_distribution" "app" {
 
   depends_on = [
     aws_lb_listener.http,
+    aws_lb_listener_rule.http_cloudfront_origin,
     aws_s3_object.maintenance_html,
   ]
 }

@@ -53,7 +53,7 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 - **VPC** — isolated network with public and private subnets across 2 AZs (no auto-assign public IPs)
 - **Internet Gateway** — public subnet default route to the internet
 - **NAT Gateway** — single shared NAT in one public subnet for private outbound (toggle with `enable_nat_gateway`)
-- **Security groups** — ALB (CloudFront prefix list when CDN is on), app (from ALB), and DB (5432 from app)
+- **Security groups** — ALB (80/443 public; origin gated by `X-Origin-Verify` on listeners), app (from ALB), and DB (5432 from app)
 - **RDS** — PostgreSQL 16, `db.t4g.micro`, single-AZ, private subnets; master password in Secrets Manager
 - **ECR** — private repos for backend and frontend images (AES256, scan-on-push, lifecycle retention)
 - **ECS** — optional (`enable_ecs`); free control plane + Spot `t4g.small` capacity; backend/frontend task definitions and services (off by default)

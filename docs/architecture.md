@@ -173,13 +173,13 @@ flowchart LR
   Users((Users / Internet))
   CF[CloudFront]
 
-  SGALB["SG: alb<br/>80/443 from CF prefix list"]
+  SGALB["SG: alb<br/>80/443 from internet"]
   SGApp["SG: app"]
   SGDb["SG: db<br/>ingress 5432 from app SG"]
   RDS[(RDS PostgreSQL)]
 
   Users -->|HTTPS| CF
-  CF -->|HTTP origin| SGALB
+  CF -->|HTTP + X-Origin-Verify| SGALB
   SGALB -->|frontend host port only| SGApp
   SGApp -->|backend host port<br/>VPC-local| SGApp
   SGApp --> SGDb
@@ -188,7 +188,7 @@ flowchart LR
 
 | Security group | Purpose | Ingress | Egress |
 | --- | --- | --- | --- |
-| `alb` | ALB (CloudFront origin) | TCP 80, 443 from CloudFront prefix list | all |
+| `alb` | ALB (CloudFront origin) | TCP 80, 443 from internet; listener requires `X-Origin-Verify` | all |
 | `app` | ECS instances / tasks | Frontend host port from `alb`; backend host port from `app` (VPC-local) | all |
 | `db` | RDS PostgreSQL | TCP 5432 from `app` | none defined |
 
@@ -235,11 +235,11 @@ Toggle in `environments/prod/main.tf`. See [`ecs-archi-decision.md`](ecs-archi-d
 | --- | --- | --- |
 | Scheme | Internet-facing (origin for CloudFront) | Public web UI only via CDN |
 | Domain | `teacherwang.xyz` (Namecheap; `alb_domain_name`) | Cheap `.xyz` + Route 53 |
-| Listener HTTP `:80` | Forward → frontend TG (CloudFront origin) | Viewer TLS terminates at CloudFront |
-| Listener HTTPS `:443` | Regional ACM → frontend TG | Kept for completeness; SG limited to CloudFront |
+| Listener HTTP `:80` | Default 403; rule forwards if `X-Origin-Verify` matches | Blocks ALB DNS bypass without CF |
+| Listener HTTPS `:443` | Same secret-header gate (regional ACM) | Direct HTTPS to ALB also gated |
 | Frontend TG | Instance targets, host port 8080 | Bridge-mode ECS |
 | Backend | Not registered on ALB | API stays VPC-local; frontend should reverse-proxy via `BACKEND_UPSTREAM` |
-| SG ingress | CloudFront managed prefix list | Block direct internet → ALB bypass |
+| Origin secret | `random_password` → CF custom header + ALB rule | Avoids CloudFront prefix-list SG quota blow-up |
 | Access logs | Off | Avoid S3 log storage cost |
 
 ### CloudFront + maintenance page (with `enable_ecs` + domain)
@@ -247,7 +247,7 @@ Toggle in `environments/prod/main.tf`. See [`ecs-archi-decision.md`](ecs-archi-d
 | Setting | Value | Rationale |
 | --- | --- | --- |
 | Distribution | `{project}-{env}-cdn` | Apex `teacherwang.xyz` → CDN |
-| Default origin | ALB DNS name, HTTP :80 | Avoid second hostname/cert for origin TLS |
+| Default origin | ALB DNS name, HTTP :80 + `X-Origin-Verify` | Avoid second hostname/cert for origin TLS |
 | Error pages | S3 `…-maintenance-<account>` + OAC | `/maintenance.html` on origin 502/503/504 |
 | Error cache TTL | 30s | Short so the site recovers quickly after deploy |
 | Viewer cert | ACM in **us-east-1** | CloudFront requirement (free) |
@@ -294,7 +294,7 @@ flowchart TB
   CF -->|502/503/504| MaintS3
 
   subgraph VPC["VPC"]
-    ALB["ALB · CloudFront origin<br/>SG: CF prefix list"]
+    ALB["ALB · CloudFront origin<br/>X-Origin-Verify gate"]
 
     subgraph Public["Public subnets"]
       FE["ECS frontend<br/>via ALB"]
