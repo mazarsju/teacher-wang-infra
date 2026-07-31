@@ -34,12 +34,29 @@ def _attr_map(user: dict) -> dict[str, str]:
     return {a["Name"]: a["Value"] for a in user.get("Attributes") or []}
 
 
+# Cognito federated usernames arrive as "{provider}_{subject}" with a lowercase
+# provider prefix (e.g. "google_…"), but AdminLinkProviderForUser requires the
+# exact IdP name configured on the pool ("Google").
+_PROVIDER_NAME_BY_PREFIX = {
+    "google": "Google",
+    "facebook": "Facebook",
+    "loginwithamazon": "LoginWithAmazon",
+    "signinwithapple": "SignInWithApple",
+}
+
+_FEDERATED_PREFIXES = tuple(f"{p}_" for p in _PROVIDER_NAME_BY_PREFIX)
+
+
+def _is_federated_username(username: str) -> bool:
+    return username.lower().startswith(_FEDERATED_PREFIXES)
+
+
 def _pick_destination(users: list[dict]) -> dict:
     """Prefer a native Cognito user over an already-federated Google_* profile."""
     native = [
         u
         for u in users
-        if not str(u.get("Username", "")).startswith(("Google_", "Facebook_", "LoginWithAmazon_", "SignInWithApple_"))
+        if not _is_federated_username(str(u.get("Username", "")))
     ]
     confirmed = [u for u in native if u.get("UserStatus") in ("CONFIRMED", "EXTERNAL_PROVIDER")]
     if confirmed:
@@ -50,11 +67,14 @@ def _pick_destination(users: list[dict]) -> dict:
 
 
 def _parse_external_username(user_name: str) -> tuple[str, str]:
-    # Cognito external usernames look like "Google_<subject>".
+    # Cognito external usernames look like "google_<subject>" (prefix lowercased).
     provider, _, subject = user_name.partition("_")
     if not provider or not subject:
         raise ValueError(f"Unexpected federated username: {user_name}")
-    return provider, subject
+    canonical = _PROVIDER_NAME_BY_PREFIX.get(provider.lower())
+    if canonical is None:
+        raise ValueError(f"Unsupported federated provider prefix: {provider}")
+    return canonical, subject
 
 
 def handler(event, context):
