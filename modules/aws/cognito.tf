@@ -217,8 +217,8 @@ resource "aws_cognito_user_pool_client" "app" {
   allowed_oauth_flows                  = ["code"]
   allowed_oauth_scopes                 = ["email", "openid", "profile"]
 
-  access_token_validity  = 1
-  id_token_validity      = 1
+  access_token_validity  = 2
+  id_token_validity      = 2
   refresh_token_validity = 30
 
   token_validity_units {
