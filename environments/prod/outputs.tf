@@ -164,6 +164,11 @@ output "ecs_autoscaling_group_name" {
   value       = module.aws.ecs_autoscaling_group_name
 }
 
+output "ecs_instance_name_tag" {
+  description = "Name tag on ECS EC2 instances (null when enable_ecs is false); use to find an instance for SSM port-forward to RDS"
+  value       = module.aws.ecs_instance_name_tag
+}
+
 output "ecs_backend_service_name" {
   description = "ECS backend service name (null when enable_ecs is false)"
   value       = module.aws.ecs_backend_service_name

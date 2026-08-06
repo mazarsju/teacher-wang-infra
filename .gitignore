@@ -1,6 +1,10 @@
 # Local secrets / AWS credentials (copy from config.example)
 config
 
+# Downloaded locally for optional direct RDS TLS (sslmode=verify-full); not used by SSM tunnel
+global-bundle.pem
+session-manager-plugin.pkg
+
 # Terraform
 **/.terraform/
 **/terraform.tfstate

@@ -168,6 +168,11 @@ output "ecs_autoscaling_group_name" {
   value       = try(aws_autoscaling_group.ecs[0].name, null)
 }
 
+output "ecs_instance_name_tag" {
+  description = "Name tag on ECS EC2 instances (null when enable_ecs is false); use to find an instance for SSM port-forward to RDS"
+  value       = var.enable_ecs ? "${local.name_prefix}-ecs-instance" : null
+}
+
 output "ecs_backend_service_name" {
   description = "ECS backend service name (null when enable_ecs is false)"
   value       = try(aws_ecs_service.backend[0].name, null)

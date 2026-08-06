@@ -56,7 +56,8 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 - **Security groups** — ALB (80/443 public; origin gated by `X-Origin-Verify` on listeners), app (from ALB), and DB (5432 from app)
 - **RDS** — PostgreSQL 16, `db.t4g.micro`, single-AZ, private subnets; master password in Secrets Manager
 - **ECR** — private repos for backend and frontend images (AES256, scan-on-push, lifecycle retention)
-- **ECS** — optional (`enable_ecs`); free control plane + Spot `t4g.small` capacity; backend/frontend task definitions and services (off by default)
+- **ECS** — optional (`enable_ecs`); free control plane + Spot `t4g.small` capacity; backend/frontend task definitions and services (off by default); instance role includes SSM for local RDS port-forwarding
+- **SSM Session Manager** — free; tunnel to private RDS via the ECS host (no bastion, RDS stays non-public)
 - **ALB** — optional with ECS; CloudFront origin on :80 → frontend only (backend stays off the ALB)
 - **CloudFront** — apex HTTPS for `teacherwang.xyz`; on ALB 502/503/504 serves a styled maintenance page from S3
 - **S3 (maintenance)** — private bucket + OAC for `maintenance.html` (Welcome Auth–style static page)
@@ -75,7 +76,7 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 
 **Planned**
 
-- **IAM** — least-privilege roles for Terraform and workloads (ECS instance / execution / task roles exist when ECS is on)
+- **IAM** — further least-privilege for Terraform operators (ECS instance role already has ECS + SSM; execution / task roles exist when ECS is on)
 
 ## Repository structure
 
@@ -250,6 +251,40 @@ When enabled, Terraform also creates:
 
 See [`docs/ecs-archi-decision.md`](docs/ecs-archi-decision.md) for why this is preferred over EKS.
 
+### Connect to RDS from your laptop (SSM tunnel)
+
+RDS is private (`publicly_accessible = false`) and only accepts `5432` from the app SG. Do **not** open it to the internet. With `enable_ecs = true`, tunnel through the ECS EC2 host via Session Manager (no bastion, no NAT required — instances already have a public IP for SSM).
+
+**Prerequisites**
+
+- [Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) for the AWS CLI
+- ECS capacity running and registered in SSM (`aws ssm describe-instance-information`)
+- Your IAM user/role can call `ssm:StartSession`
+
+```bash
+cd environments/prod
+
+NAME_TAG=$(terraform output -raw ecs_instance_name_tag)
+RDSHOST=$(terraform output -raw db_address)
+SECRET_ARN=$(terraform output -raw db_master_user_secret_arn)
+DBNAME=$(terraform output -raw db_name)
+
+INSTANCE_ID=$(aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=${NAME_TAG}" "Name=instance-state-name,Values=running" \
+  --query 'Reservations[0].Instances[0].InstanceId' --output text)
+
+# Terminal A — keep the tunnel open (use 15432 locally so a laptop Postgres on 5432 does not win)
+aws ssm start-session \
+  --target "$INSTANCE_ID" \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters "{\"host\":[\"${RDSHOST}\"],\"portNumber\":[\"5432\"],\"localPortNumber\":[\"15432\"]}"
+
+# Terminal B — connect via localhost (sslmode=require; verify-full fails against 127.0.0.1)
+psql "host=127.0.0.1 port=15432 dbname=${DBNAME} user=teacherwang sslmode=require password=$(aws secretsmanager get-secret-value --secret-id "$SECRET_ARN" --query SecretString --output text | jq -r '.password')"
+```
+
+After the first apply that attaches `AmazonSSMManagedInstanceCore`, wait a minute for the instance to appear in SSM. If it never shows up, reboot the ECS instance once (Spot recycle also works).
+
 ### Cognito (end-user identity)
 
 Always provisioned (near-free under Cognito MAU free tier). After apply:
@@ -346,6 +381,7 @@ Alternative: create the secret yourself and set `TF_VAR_llm_api_key_secret_arn` 
 ### 3. Data layer
 
 - [x] RDS PostgreSQL (cheap sizing: `db.t4g.micro`, single-AZ, private, Secrets Manager password)
+- [x] Local RDS access via SSM port-forward through the ECS host (no public RDS / bastion)
 - [ ] Backup / retention policy (currently 1-day automated backups — free-tier max)
 
 Schema / migrations live in **[teacher-wang-app](https://github.com/mazarsju/teacher-wang-app)** (DB URL config + Alembic); this repo only provisions the empty PostgreSQL database.

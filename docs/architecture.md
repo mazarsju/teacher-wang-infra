@@ -201,6 +201,7 @@ flowchart LR
 | Storage | 20 GiB gp3, encrypted | Free-tier–friendly baseline |
 | Network | Private subnets, not public | Only reachable via app SG |
 | Password | RDS-managed Secrets Manager secret | No password in Terraform state |
+| Local admin access | SSM port-forward via ECS EC2 host | No public RDS / bastion; see README |
 | Backups | 1-day retention | Free-tier account limit; raise when upgrading the account plan |
 
 ### ECR repositories
@@ -223,6 +224,7 @@ Toggle in `environments/prod/main.tf`. See [`ecs-archi-decision.md`](ecs-archi-d
 | Capacity | 1× Spot `t4g.small` (min 0, max 2) | Cheap ARM host; bin-pack both apps |
 | Subnets | Public + public IP | Pull from ECR without NAT |
 | Instance SG | `app` | Tasks/instances can reach RDS on 5432 |
+| Instance IAM | ECS container service role + `AmazonSSMManagedInstanceCore` | SSM Session Manager for local RDS tunnels (free) |
 | Backend task | 512 CPU / 512 MiB, host port 5000 | Fits with frontend on one `t4g.small` |
 | Frontend task | 256 CPU / 256 MiB, host port 8080 | Static/nginx-style container |
 | Env / secrets | `DB_*` + `DB_PASSWORD` from Secrets Manager; `LLM_API_KEY` from Secrets Manager; `LLM_MODEL` + `COGNITO_*` as env | Password and API key not in task JSON plaintext |

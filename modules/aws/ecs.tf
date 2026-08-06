@@ -4,6 +4,7 @@
 # - ECS control plane is free (unlike EKS ~$73/mo).
 # - Pay only for the EC2 Spot t4g.small (and EBS). Toggle enable_ecs off when idle.
 # - Instances sit in public subnets with a public IP so image pulls work without NAT.
+# - Instance role includes AmazonSSMManagedInstanceCore for Session Manager RDS tunnels.
 # - Container Insights disabled to avoid CloudWatch ingestion cost.
 # - Task definitions / services live in ecs_services.tf (same enable_ecs gate).
 
@@ -56,6 +57,14 @@ resource "aws_iam_role_policy_attachment" "ecs_instance" {
 
   role       = aws_iam_role.ecs_instance[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+}
+
+# Session Manager (no bastion / no public RDS). Use for local psql via port forwarding.
+resource "aws_iam_role_policy_attachment" "ecs_instance_ssm" {
+  count = var.enable_ecs ? 1 : 0
+
+  role       = aws_iam_role.ecs_instance[0].name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
 resource "aws_iam_instance_profile" "ecs" {

@@ -104,6 +104,8 @@ enable_ecs = true   # create cluster + Spot capacity
 
 NAT stays off unless you deliberately move instances to private subnets later.
 
+ECS instance IAM includes `AmazonSSMManagedInstanceCore` so operators can SSM port-forward to private RDS from a laptop (no bastion). See README “Connect to RDS from your laptop”.
+
 Images for these nodes should be **`linux/arm64`** (Graviton). On an Apple Silicon Mac that matches native builds; on other hosts use `docker buildx --platform linux/arm64`.
 
 ## When to revisit
