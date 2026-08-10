@@ -348,13 +348,13 @@ Password auth works without Google. Flask verifies access tokens via JWKS (`GET 
 
 ### Backend LLM secrets
 
-The backend task gets `LLM_MODEL` as a plain env var (default `gpt-4o-mini`) and `LLM_API_KEY` from Secrets Manager.
+The backend task gets `LLM_MODEL` as a plain env var (default `gpt-5.6-luna`) and `LLM_API_KEY` from Secrets Manager.
 
 ```bash
 # In gitignored `config` (see config.example), then:
 source ./config
 export TF_VAR_llm_api_key="sk-...."
-# optional: export TF_VAR_llm_model="gpt-4o-mini"
+# optional: export TF_VAR_llm_model="gpt-5.6-luna"
 cd environments/prod
 terraform apply
 ```

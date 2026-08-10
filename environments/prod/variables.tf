@@ -33,7 +33,7 @@ variable "llm_api_key_secret_arn" {
 variable "llm_model" {
   description = "LLM model id for the backend (LLM_MODEL env). Override with TF_VAR_llm_model if needed."
   type        = string
-  default     = "gpt-4o-mini"
+  default     = "gpt-5.6-luna"
 }
 
 variable "gcp_project_id" {

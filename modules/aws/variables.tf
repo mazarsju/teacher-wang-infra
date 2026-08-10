@@ -227,7 +227,7 @@ variable "llm_api_key_secret_arn" {
 variable "llm_model" {
   description = "LLM model id passed to the backend as LLM_MODEL (non-secret env)."
   type        = string
-  default     = "gpt-4o-mini"
+  default     = "gpt-5.6-luna"
 }
 
 variable "additional_tags" {
