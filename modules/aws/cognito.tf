@@ -230,3 +230,25 @@ resource "aws_cognito_user_pool_client" "app" {
   # App client must be created/updated after the Google IdP exists when enabled.
   depends_on = [aws_cognito_identity_provider.google]
 }
+
+# Backend ECS needs AdminDeleteUser for DELETE /admin/users/<id>.
+data "aws_iam_policy_document" "ecs_task_cognito_admin" {
+  count = var.enable_ecs ? 1 : 0
+
+  statement {
+    sid    = "AdminDeleteUser"
+    effect = "Allow"
+    actions = [
+      "cognito-idp:AdminDeleteUser",
+    ]
+    resources = [aws_cognito_user_pool.main.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "ecs_task_cognito_admin" {
+  count = var.enable_ecs ? 1 : 0
+
+  name   = "${local.name_prefix}-ecs-task-cognito-admin"
+  role   = aws_iam_role.ecs_task[0].id
+  policy = data.aws_iam_policy_document.ecs_task_cognito_admin[0].json
+}

@@ -86,7 +86,7 @@ data "aws_iam_policy_document" "ecs_task_assume" {
   }
 }
 
-# Application task role (S3 conversation logs via conversation_logs.tf). Distinct from execution role.
+# Application task role (S3 conversation logs + Cognito AdminDeleteUser). Distinct from execution role.
 resource "aws_iam_role" "ecs_task" {
   count = var.enable_ecs ? 1 : 0
 

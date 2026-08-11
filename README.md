@@ -62,6 +62,7 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 - **CloudFront** — apex HTTPS for `teacherwang.xyz`; on ALB 502/503/504 serves a styled maintenance page from S3
 - **S3 (maintenance)** — private bucket + OAC for `maintenance.html` (Welcome Auth–style static page)
 - **S3 (conversation logs)** — private bucket for per-user chat transcripts (`users/{cognito_sub}/…`); ECS task role can read/write objects under `users/`
+- **Cognito admin delete** — ECS task role can call `cognito-idp:AdminDeleteUser` on the app User Pool (needed by backend `DELETE /admin/users/<id>`)
 - **Route 53** — public hosted zone for `teacherwang.xyz` when `alb_domain_name` is set (~$0.50/mo); apex → CloudFront
 - **ACM** — free certs for ALB (`eu-west-1`) and CloudFront (`us-east-1`), DNS-validated via Route 53
 - **Cognito** — User Pool + public app client + Hosted UI domain; optional Google IdP when `TF_VAR_cognito_google_client_*` are set; ECS tasks get `COGNITO_*` env
