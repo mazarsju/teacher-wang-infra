@@ -10,13 +10,14 @@ Accepted
 
 ## Decision
 
-**Use Amazon ECS on EC2 (Spot, Graviton) as the container platform. Do not use Amazon EKS for this stage of the project.**
+**Use Amazon ECS on EC2 (Graviton) as the container platform. Do not use Amazon EKS for this stage of the project.**
 
 | Choice | Detail |
 | --- | --- |
 | Orchestrator | **Amazon ECS** (control plane **free**) |
 | Compute | **EC2** launch type, capacity provider on an ASG |
-| Instance | `t4g.small` Spot (ARM), one instance for both apps |
+| Instance | `t4g.small` ARM, one instance for both apps |
+| Market | **On-demand in prod** (`ecs_use_spot = false`) for availability; Spot remains optional via that toggle |
 | Placement | Public subnets + public IP (no NAT required) |
 | Ingress | Public ALB → **frontend only** (HTTPS when domain set); backend VPC-local (`BACKEND_UPSTREAM`) |
 | Toggle | `enable_ecs` in `environments/prod/main.tf` (default `false`) |
@@ -37,7 +38,7 @@ Rough **eu-west-1, always-on** compute+delivery cost for this workload (excludin
 | Option | Control plane | ~USD/mo excl. RDS | Notes |
 | --- | --- | --- | --- |
 | **EKS + Spot node + NAT** | ~$73 | ~110–120 | K8s ecosystem; expensive floor for 2 containers |
-| **ECS on EC2 Spot (chosen)** | $0 | ~8–20 | Same ECR images; bin-pack both apps on one instance |
+| **ECS on EC2 (chosen)** | $0 | ~28–35 (on-demand + ALB) | Same ECR images; bin-pack both apps on one instance; Spot (~$21–28 with ALB) is cheaper but interruptible |
 | ECS on Fargate | $0 | ~20–40 | Less ops on instances; higher compute unit price |
 | App Runner + S3/CloudFront | n/a | ~15–40 | Very simple API hosting; less VPC control |
 | Single EC2 / Docker Compose | $0 | ~10–15 | Cheapest DIY; weaker deploy story than ECS |
@@ -45,7 +46,7 @@ Rough **eu-west-1, always-on** compute+delivery cost for this workload (excludin
 
 ## Why ECS on EC2
 
-1. **Cost** — No orchestration tax. Bill is dominated by one small Spot instance (and RDS we already need). Turning `enable_ecs` off destroys capacity and stops that bill.
+1. **Cost** — No orchestration tax. Bill is dominated by one small instance + ALB (and RDS we already need). Turning `enable_ecs` off destroys capacity and stops that bill. Prod prefers **on-demand** over Spot after Spot capacity reclaim left the site on the maintenance page with no replacement host.
 2. **Fit** — Two long-running containers from ECR match ECS services/tasks naturally.
 3. **Reuse** — Keeps the VPC, security groups (`app` → `db`), and ECR wiring already in this repo.
 4. **No NAT for now** — Container instances use public subnets with a public IP so they can pull from ECR without a ~$32/mo NAT Gateway. Private+NAT remains available later if we harden placement.
@@ -98,7 +99,8 @@ flowchart TB
 In `environments/prod/main.tf`:
 
 ```hcl
-enable_ecs = true   # create cluster + Spot capacity
+enable_ecs     = true   # create cluster + EC2 capacity
+ecs_use_spot   = false  # on-demand (prod); set true to save ~30–50% on the instance
 # enable_ecs = false  # destroy capacity; ECS control plane fee is still $0
 ```
 
@@ -116,4 +118,4 @@ Reconsider EKS (or ECS Fargate-only) if:
 - Many independently scaling services make EC2 bin-packing awkward
 - A team is already standardized on Kubernetes and ops cost is funded
 
-Until then, **ECS on EC2 Spot** is the default path in this repository.
+Until then, **ECS on EC2 (Graviton)** is the default path in this repository. Re-enable Spot (`ecs_use_spot = true`) only when you accept interruption risk for lower instance cost.

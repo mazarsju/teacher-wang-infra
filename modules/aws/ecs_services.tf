@@ -1,7 +1,7 @@
 # ECS task definitions + services for backend and frontend.
 #
 # Cost notes:
-# - Tasks run on the existing Spot EC2 capacity (no Fargate charge).
+# - Tasks run on the existing EC2 capacity (no Fargate charge).
 # - CloudWatch Logs retention kept short (default 7 days).
 # - Push linux/arm64 images to ECR before (or right after) enabling services;
 #   otherwise tasks stay in a pull/start failure loop.

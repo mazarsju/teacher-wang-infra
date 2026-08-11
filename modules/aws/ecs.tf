@@ -1,8 +1,8 @@
-# ECS cluster + EC2 Spot capacity (frontend + backend on one small instance).
+# ECS cluster + EC2 capacity (frontend + backend on one small instance).
 #
 # Cost notes:
 # - ECS control plane is free (unlike EKS ~$73/mo).
-# - Pay only for the EC2 Spot t4g.small (and EBS). Toggle enable_ecs off when idle.
+# - Pay for the EC2 t4g.small (and EBS); Spot via ecs_use_spot. Toggle enable_ecs off when idle.
 # - Instances sit in public subnets with a public IP so image pulls work without NAT.
 # - Instance role includes AmazonSSMManagedInstanceCore for Session Manager RDS tunnels.
 # - Container Insights disabled to avoid CloudWatch ingestion cost.
@@ -118,9 +118,10 @@ resource "aws_ecs_cluster" "main" {
 resource "aws_launch_template" "ecs" {
   count = var.enable_ecs ? 1 : 0
 
-  name_prefix   = "${local.name_prefix}-ecs-"
-  image_id      = data.aws_ssm_parameter.ecs_ami[0].value
-  instance_type = var.ecs_instance_type
+  name_prefix            = "${local.name_prefix}-ecs-"
+  image_id               = data.aws_ssm_parameter.ecs_ami[0].value
+  instance_type          = var.ecs_instance_type
+  update_default_version = true
 
   iam_instance_profile {
     arn = aws_iam_instance_profile.ecs[0].arn

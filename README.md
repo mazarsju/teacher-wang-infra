@@ -21,7 +21,7 @@ Naming and tags: [`docs/tagging-and-naming.md`](docs/tagging-and-naming.md).
 
 Longer design notes live under `docs/` as `*-archi-decision.md` (see `agent.md` for archiving rules):
 
-- [ECS instead of EKS](docs/ecs-archi-decision.md) — Spot Graviton on ECS; no EKS control-plane fee
+- [ECS instead of EKS](docs/ecs-archi-decision.md) — Graviton on ECS (on-demand in prod); no EKS control-plane fee
 - [Multi-user auth & tenancy](docs/multi-user-archi-decision.md) — Cognito; shared schema + RLS + partitions; shared read-only catalog
 
 Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
@@ -33,7 +33,7 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 | IaC | Terraform (>= 1.10) |
 | Cloud | **AWS** (app hosting) + **GCP** (Google OAuth project for SSO) |
 | Remote state | **S3** with native lock files (`use_lockfile`, no DynamoDB) |
-| Orchestration | **Amazon ECS** on EC2 (Spot Graviton) — not EKS |
+| Orchestration | **Amazon ECS** on EC2 (Graviton; on-demand in prod) — not EKS |
 | Containers | **Amazon ECR** (image registry) |
 | Networking | VPC, IGW, single NAT (optional), route tables, security groups, ALB |
 | Database | **Amazon RDS** PostgreSQL (`db.t4g.micro`, single-AZ) |
@@ -56,7 +56,7 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 - **Security groups** — ALB (80/443 public; origin gated by `X-Origin-Verify` on listeners), app (from ALB), and DB (5432 from app)
 - **RDS** — PostgreSQL 16, `db.t4g.micro`, single-AZ, private subnets; master password in Secrets Manager
 - **ECR** — private repos for backend and frontend images (AES256, scan-on-push, lifecycle retention)
-- **ECS** — optional (`enable_ecs`); free control plane + Spot `t4g.small` capacity; backend/frontend task definitions and services (off by default); instance role includes SSM for local RDS port-forwarding
+- **ECS** — optional (`enable_ecs`); free control plane + `t4g.small` capacity (`ecs_use_spot = false` in prod for availability); backend/frontend task definitions and services (off by default); instance role includes SSM for local RDS port-forwarding
 - **SSM Session Manager** — free; tunnel to private RDS via the ECS host (no bastion, RDS stays non-public)
 - **ALB** — optional with ECS; CloudFront origin on :80 → frontend only (backend stays off the ALB)
 - **CloudFront** — apex HTTPS for `teacherwang.xyz`; on ALB 502/503/504 serves a styled maintenance page from S3
@@ -230,7 +230,8 @@ Prod defaults keep always-on paid pieces **off**:
 | Flag | File | Default | Approx. cost when on |
 | --- | --- | --- | --- |
 | `enable_nat_gateway` | `environments/prod/main.tf` | `false` | ~$32/mo + data |
-| `enable_ecs` | `environments/prod/main.tf` | `false` | ~$8–20/mo Spot `t4g.small` + **~$16/mo ALB** (ECS control plane is **free**) |
+| `enable_ecs` | `environments/prod/main.tf` | `false` | ~$12–15/mo on-demand `t4g.small` + **~$16/mo ALB** (ECS control plane is **free**) |
+| `ecs_use_spot` | `environments/prod/main.tf` | `false` (prod) | Spot saves ~30–50% on the instance but can be interrupted (caused a prod outage) |
 
 ECS instances use public subnets + public IP, so **NAT is not required**. Push **`linux/arm64`** images to ECR **before** (or immediately after) enabling services, or tasks will fail to pull.
 
@@ -284,7 +285,7 @@ aws ssm start-session \
 psql "host=127.0.0.1 port=15432 dbname=${DBNAME} user=teacherwang sslmode=require password=$(aws secretsmanager get-secret-value --secret-id "$SECRET_ARN" --query SecretString --output text | jq -r '.password')"
 ```
 
-After the first apply that attaches `AmazonSSMManagedInstanceCore`, wait a minute for the instance to appear in SSM. If it never shows up, reboot the ECS instance once (Spot recycle also works).
+After the first apply that attaches `AmazonSSMManagedInstanceCore`, wait a minute for the instance to appear in SSM. If it never shows up, reboot the ECS instance once.
 
 ### Cognito (end-user identity)
 
@@ -390,7 +391,7 @@ Schema / migrations live in **[teacher-wang-app](https://github.com/mazarsju/tea
 ### 4. Container platform
 
 - [x] ECR repositories for backend and frontend
-- [x] ECS cluster + EC2 Spot capacity (gated by `enable_ecs`, default off; no EKS)
+- [x] ECS cluster + EC2 capacity (gated by `enable_ecs`, default off; prod uses on-demand via `ecs_use_spot = false`; no EKS)
 - [x] ECS task definitions and services (frontend + backend)
 - [x] ALB ingress (public frontend only; backend VPC-local)
 - [x] Task env wiring: backend `DB_*` / `DB_PASSWORD`, frontend `BACKEND_UPSTREAM`

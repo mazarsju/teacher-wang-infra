@@ -44,7 +44,7 @@ variable "enable_nat_gateway" {
 }
 
 variable "enable_ecs" {
-  description = "Provision ECS cluster + EC2 Spot capacity (~instance cost only; ECS control plane is free). Set false when idle."
+  description = "Provision ECS cluster + EC2 capacity (~instance cost only; ECS control plane is free). Set false when idle."
   type        = bool
   default     = false
 }
@@ -56,7 +56,7 @@ variable "ecs_instance_type" {
 }
 
 variable "ecs_use_spot" {
-  description = "Use Spot instances for ECS capacity (cheaper; can be interrupted)"
+  description = "Use Spot for ECS capacity (cheaper; can be interrupted). Prod sets false for availability."
   type        = bool
   default     = true
 }

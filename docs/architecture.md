@@ -9,7 +9,7 @@ Multi-user auth / tenancy / shared data: [`multi-user-archi-decision.md`](multi-
 ## Current state (networking + data + registry + Cognito + optional ECS + CloudFront)
 
 Provisioned today: remote state, VPC, subnets, IGW, optional single NAT, route tables, security group baselines, RDS PostgreSQL (single-AZ, `db.t4g.micro`), ECR repositories for backend/frontend images, and a **Cognito User Pool** (app client + Hosted UI domain; optional Google IdP when OAuth secrets are set).
-ECS is **optional** via `enable_ecs` (default `false`) — control plane is free; cost is the Spot EC2 instance + ALB. When enabled, backend/frontend services, a **public ALB (frontend only)**, and **CloudFront** (apex DNS + deploy maintenance page) are created too; tasks receive Cognito env vars for JWT verification, `CONVERSATION_LOGS_*` pointing at the private conversation-logs S3 bucket (`users/{cognito_sub}/…`), `LLM_MODEL` as env, and `LLM_API_KEY` from Secrets Manager when seeded via `TF_VAR_llm_api_key` (or an existing secret ARN).
+ECS is **optional** via `enable_ecs` (default `false`) — control plane is free; cost is the EC2 instance + ALB. Prod uses **on-demand** `t4g.small` (`ecs_use_spot = false`) for capacity reliability; Spot remains available via that toggle. When enabled, backend/frontend services, a **public ALB (frontend only)**, and **CloudFront** (apex DNS + deploy maintenance page) are created too; tasks receive Cognito env vars for JWT verification, `CONVERSATION_LOGS_*` pointing at the private conversation-logs S3 bucket (`users/{cognito_sub}/…`), `LLM_MODEL` as env, and `LLM_API_KEY` from Secrets Manager when seeded via `TF_VAR_llm_api_key` (or an existing secret ARN).
 DNS/TLS for **`teacherwang.xyz`** (registered at **Namecheap**; Route 53 + ACM via `alb_domain_name`); public HTTPS is on CloudFront when ECS is on.
 
 ### High-level AWS account
@@ -221,7 +221,7 @@ Toggle in `environments/prod/main.tf`. See [`ecs-archi-decision.md`](ecs-archi-d
 | Setting | Value | Rationale |
 | --- | --- | --- |
 | Cluster | `teacher-wang-prod-ecs` | One cluster for frontend + backend |
-| Capacity | 1× Spot `t4g.small` (min 0, max 2) | Cheap ARM host; bin-pack both apps |
+| Capacity | 1× on-demand `t4g.small` (min 0, max 2; `ecs_use_spot = false`) | ARM host; bin-pack both apps; on-demand avoids Spot reclaim outages |
 | Subnets | Public + public IP | Pull from ECR without NAT |
 | Instance SG | `app` | Tasks/instances can reach RDS on 5432 |
 | Instance IAM | ECS container service role + `AmazonSSMManagedInstanceCore` | SSM Session Manager for local RDS tunnels (free) |
@@ -301,7 +301,7 @@ flowchart TB
     subgraph Public["Public subnets"]
       FE["ECS frontend<br/>via ALB"]
       BE["ECS backend<br/>VPC-local only"]
-      ECS["Spot EC2 capacity<br/>toggle: enable_ecs"]
+      ECS["EC2 capacity (on-demand)<br/>toggle: enable_ecs"]
     end
 
     subgraph Private["Private subnets"]
@@ -377,7 +377,7 @@ Summary:
 | Cognito User Pool | ~$0 under free-tier MAU | Google IdP optional; no always-on compute |
 | ECR (empty / light use) | Near-free | Storage + data transfer; lifecycle keeps image count low |
 | ECS control plane | **Free** | Why we chose ECS over EKS |
-| ECS Spot `t4g.small` | Paid (~$5–12/mo) when on | Toggle with `enable_ecs` (default off) |
+| ECS on-demand `t4g.small` | Paid (~$12–15/mo) when on | Prod `ecs_use_spot = false`; Spot (~$5–12/mo) available but interruptible |
 | ALB (with ECS) | Paid (~$16/mo + LCU) when on | CloudFront origin; destroyed with `enable_ecs` |
 | CloudFront + maintenance S3 | ~$0 under free allowances | Custom 502/503/504 → maintenance.html |
 | Route 53 hosted zone | ~$0.50/mo when `alb_domain_name` set | `teacherwang.xyz` (Namecheap registration) |
