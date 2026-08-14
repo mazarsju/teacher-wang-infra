@@ -40,3 +40,5 @@ export AWS_DEFAULT_REGION="eu-west-1"
 # export TF_VAR_llm_model="gpt-5.6-luna"
 # Alternative: existing Secrets Manager plain-string secret
 # export TF_VAR_llm_api_key_secret_arn="arn:aws:secretsmanager:..."
+# --- Currents API Key ------------------------------------------------------------
+export TF_VAR_currents_api_key=...
