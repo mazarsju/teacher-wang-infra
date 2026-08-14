@@ -23,6 +23,7 @@ flowchart TB
     Cognito["Cognito User Pool<br/>password · optional Google<br/>+ Pre Sign-up Lambda"]
     CF["CloudFront + maintenance S3<br/>(when ECS + domain)"]
     ChatS3["S3 conversation logs<br/>teacher-wang-prod-conversation-logs-&lt;account&gt;"]
+    SNS["SNS topic<br/>cognito-new-user<br/>→ email subscription"]
 
     subgraph Region["Region: eu-west-1 (default)"]
       VPC["VPC 10.0.0.0/16"]
@@ -35,6 +36,8 @@ flowchart TB
   TF --> Cognito
   TF --> CF
   TF --> ChatS3
+  TF --> SNS
+  Cognito -.->|new user, via Pre Sign-up Lambda| SNS
 ```
 
 ### Cognito (end-user identity)
@@ -47,8 +50,9 @@ flowchart TB
 | Google IdP | When `TF_VAR_cognito_google_client_*` or secret ARN set | Password + Google SSO |
 | Google redirect | `cognito_google_redirect_uri` output | Paste into Google Cloud OAuth Web client |
 | Unique email / account link | Pre Sign-up Lambda (`…-cognito-pre-signup`) | Same email → same Cognito user for password + Google |
+| New-user alert | Pre Sign-up Lambda publishes to SNS topic `…-cognito-new-user`; email subscription (`mazarsju@gmail.com`) | Ops notified on every new sign-up (native or first Google) |
 | Callbacks | `https://teacherwang.xyz` (+ `/login`) and localhost Vite | Prod + local dev |
-| Cost | ~$0 under early MAU free tier; Lambda cheap | Matches cost posture |
+| Cost | ~$0 under early MAU free tier; Lambda + SNS email are near-free at this volume | Matches cost posture |
 | GCP project | `teacher-wang` (`module.gcp`) | Billing linked; OAuth Web client Console-once |
 
 ### GCP (Google SSO scaffolding)
@@ -70,6 +74,8 @@ flowchart LR
   Google[Google IdP] -.->|optional| Pool
   Pool -->|Pre Sign-up trigger| Lambda["Lambda<br/>…-cognito-pre-signup"]
   Lambda -->|ListUsers · AdminLinkProviderForUser| Pool
+  Lambda -->|new user| SNS["SNS topic<br/>cognito-new-user"]
+  SNS -->|email| Ops([Ops inbox])
   FE -->|Bearer access_token| BE[Backend]
   BE -->|JWKS verify| Pool
 ```
@@ -103,6 +109,8 @@ sequenceDiagram
     Note over FE,Cognito: Retry Google once → same sub
   else New email / normal path
     Lambda-->>Cognito: Allow (auto-confirm if Google)
+    Lambda->>SNS: Publish "new user" (best-effort)
+    SNS->>Ops: Email notification
     Cognito-->>FE: Access + ID + refresh tokens
   end
 

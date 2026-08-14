@@ -67,7 +67,8 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 - **ACM** — free certs for ALB (`eu-west-1`) and CloudFront (`us-east-1`), DNS-validated via Route 53
 - **Cognito** — User Pool + public app client + Hosted UI domain; optional Google IdP when `TF_VAR_cognito_google_client_*` are set; ECS tasks get `COGNITO_*` env
 - **Secrets Manager** — RDS master password (RDS-managed); optional Google OAuth JSON; **LLM API key** (`TF_VAR_llm_api_key`) injected into the backend task as `LLM_API_KEY`
-- **Lambda (Cognito Pre Sign-up)** — enforces unique email; links Google SSO to an existing password user with the same email (`AdminLinkProviderForUser`)
+- **Lambda (Cognito Pre Sign-up)** — enforces unique email; links Google SSO to an existing password user with the same email (`AdminLinkProviderForUser`); publishes to SNS on every genuinely new user
+- **SNS** — `cognito-new-user` topic; email subscription (`mazarsju@gmail.com`) alerts on new Cognito sign-ups (native or first-time Google)
 
 **GCP (Google SSO)**
 
@@ -83,10 +84,12 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 
 ```
 teacher-wang-infra/
-├── agent.md                 # Instructions for coding agents (keep README + architecture in sync)
+├── AGENTS.md                # Instructions for coding agents (keep README + architecture in sync)
+├── CLAUDE.md                # Claude Code entry point (imports AGENTS.md)
 ├── README.md                # Source of truth for status, stack, and layout
 ├── .gitignore               # Ignores local secrets, Terraform state, OS junk
 ├── .cursor/skills/          # Cursor agent skills (e.g. tf state lock recovery)
+├── .claude/skills/          # Same agent skills, packaged for Claude Code
 ├── config.example           # Template for local AWS / LLM / Google TF_VAR secrets
 ├── config                   # Your secrets (gitignored) — copy from config.example
 ├── docs/
