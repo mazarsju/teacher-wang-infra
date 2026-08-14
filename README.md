@@ -208,20 +208,20 @@ aws ecr get-login-password --region "$AWS_REGION" \
 Then from **teacher-wang-app** (adjust Dockerfile paths if different):
 
 ```bash
-# Backend
-docker buildx build --platform linux/arm64 \
+# Backend — disable attestations so multi-tag pushes cannot leave :latest on a provenance stub
+docker buildx build --platform linux/arm64 --provenance=false --sbom=false \
   -t "$ECR_BACKEND:latest" \
   -f path/to/backend/Dockerfile \
   --push .
 
 # Frontend
-docker buildx build --platform linux/arm64 \
+docker buildx build --platform linux/arm64 --provenance=false --sbom=false \
   -t "$ECR_FRONTEND:latest" \
   -f path/to/frontend/Dockerfile \
   --push .
 ```
 
-Prefer a git SHA tag in addition to `:latest` once you deploy for real (`-t "$ECR_BACKEND:$(git rev-parse --short HEAD)"`).
+Prefer the app-repo wrapper (`.cursor/skills/update-ecr-images/scripts/push.sh`) or `scripts/push-ecr.sh` — both pass those flags and also tag `:<git-sha>`. After push, force a new ECS deployment (the wrapper does this); pushing `:latest` alone does not restart tasks.
 
 ### Toggle expensive components
 
