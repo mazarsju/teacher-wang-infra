@@ -1,6 +1,26 @@
 # Pre Sign-up Lambda: enforce unique email + link Google SSO to existing users.
+# Also publishes to SNS on every genuinely new user (native or first-time
+# Google) so an email alert goes out.
 #
 # Cost: Lambda free-tier friendly; short CloudWatch log retention (7 days).
+# SNS email notifications are ~$0 at this volume.
+
+resource "aws_sns_topic" "cognito_new_user" {
+  name = "${local.name_prefix}-cognito-new-user"
+
+  tags = merge(local.resource_tags, {
+    Name = "${local.name_prefix}-cognito-new-user"
+    Tier = "shared"
+  })
+}
+
+# SNS emails the address a confirmation link; subscription stays PendingConfirmation
+# until it's clicked.
+resource "aws_sns_topic_subscription" "cognito_new_user_email" {
+  topic_arn = aws_sns_topic.cognito_new_user.arn
+  protocol  = "email"
+  endpoint  = "mazarsju@gmail.com"
+}
 
 data "archive_file" "cognito_pre_signup" {
   type        = "zip"
@@ -60,6 +80,12 @@ data "aws_iam_policy_document" "cognito_pre_signup" {
       "arn:aws:cognito-idp:${var.aws_region}:${data.aws_caller_identity.current.account_id}:userpool/*",
     ]
   }
+
+  statement {
+    sid       = "NotifyNewUser"
+    actions   = ["sns:Publish"]
+    resources = [aws_sns_topic.cognito_new_user.arn]
+  }
 }
 
 resource "aws_iam_role_policy" "cognito_pre_signup" {
@@ -79,6 +105,12 @@ resource "aws_lambda_function" "cognito_pre_signup" {
 
   filename         = data.archive_file.cognito_pre_signup.output_path
   source_code_hash = data.archive_file.cognito_pre_signup.output_base64sha256
+
+  environment {
+    variables = {
+      NEW_USER_SNS_TOPIC_ARN = aws_sns_topic.cognito_new_user.arn
+    }
+  }
 
   depends_on = [
     aws_cloudwatch_log_group.cognito_pre_signup,

@@ -11,6 +11,7 @@ Behaviors:
 from __future__ import annotations
 
 import logging
+import os
 
 import boto3
 
@@ -18,6 +19,22 @@ LOG = logging.getLogger()
 LOG.setLevel(logging.INFO)
 
 cognito = boto3.client("cognito-idp")
+sns = boto3.client("sns")
+
+NEW_USER_SNS_TOPIC_ARN = os.environ.get("NEW_USER_SNS_TOPIC_ARN")
+
+
+def _notify_new_user(email: str, trigger: str) -> None:
+    if not NEW_USER_SNS_TOPIC_ARN:
+        return
+    try:
+        sns.publish(
+            TopicArn=NEW_USER_SNS_TOPIC_ARN,
+            Subject="New Cognito user",
+            Message=f"New user signed up: {email} (via {trigger})",
+        )
+    except Exception:
+        LOG.exception("failed to publish new-user notification")
 
 
 def _find_users_by_email(user_pool_id: str, email: str) -> list[dict]:
@@ -95,6 +112,7 @@ def handler(event, context):
         if existing:
             LOG.info("reject signup: email already in use")
             raise Exception("EMAIL_EXISTS")
+        _notify_new_user(email, trigger)
         return event
 
     if trigger == "PreSignUp_ExternalProvider":
@@ -104,6 +122,7 @@ def handler(event, context):
             event.setdefault("response", {})
             event["response"]["autoConfirmUser"] = True
             event["response"]["autoVerifyEmail"] = True
+            _notify_new_user(email, trigger)
             return event
 
         destination = _pick_destination(existing)
