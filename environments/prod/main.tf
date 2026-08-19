@@ -47,6 +47,10 @@ module "aws" {
   llm_api_key            = var.llm_api_key
   llm_api_key_secret_arn = var.llm_api_key_secret_arn
   llm_model              = var.llm_model
+
+  # Currents API key. Seed via TF_VAR_currents_api_key (Secrets Manager).
+  currents_api_key            = var.currents_api_key
+  currents_api_key_secret_arn = var.currents_api_key_secret_arn
 }
 
 # GCP project already exists (teacher-wang). Terraform manages billing link + APIs only.

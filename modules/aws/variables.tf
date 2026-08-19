@@ -230,6 +230,19 @@ variable "llm_model" {
   default     = "gpt-5.6-luna"
 }
 
+variable "currents_api_key" {
+  description = "Currents API key for the backend. Prefer TF_VAR_currents_api_key; stored in Secrets Manager and injected into the ECS task. Null skips the secret (unless currents_api_key_secret_arn is set)."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "currents_api_key_secret_arn" {
+  description = "Optional Secrets Manager secret ARN for a plain-string Currents API key. Alternative to TF_VAR_currents_api_key."
+  type        = string
+  default     = null
+}
+
 variable "additional_tags" {
   description = "Extra tags merged onto taggable resources (on top of provider default_tags)"
   type        = map(string)

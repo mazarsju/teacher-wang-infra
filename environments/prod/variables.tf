@@ -36,6 +36,19 @@ variable "llm_model" {
   default     = "gpt-5.6-luna"
 }
 
+variable "currents_api_key" {
+  description = "Currents API key for the backend. Prefer TF_VAR_currents_api_key; stored in Secrets Manager."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "currents_api_key_secret_arn" {
+  description = "Optional Secrets Manager ARN for a plain-string Currents API key (alternative to TF_VAR_currents_api_key)."
+  type        = string
+  default     = null
+}
+
 variable "gcp_project_id" {
   description = "GCP project ID for Google SSO OAuth client (Console)"
   type        = string

@@ -63,6 +63,18 @@ data "aws_iam_policy_document" "ecs_task_execution_secrets" {
       ]
     }
   }
+
+  dynamic "statement" {
+    for_each = local.currents_api_key_secret_arn != null ? [1] : []
+
+    content {
+      sid     = "ReadCurrentsApiKeySecret"
+      actions = ["secretsmanager:GetSecretValue"]
+      resources = [
+        local.currents_api_key_secret_arn,
+      ]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
@@ -156,6 +168,12 @@ resource "aws_ecs_task_definition" "backend" {
           {
             name      = "LLM_API_KEY"
             valueFrom = local.llm_api_key_secret_arn
+          }
+        ],
+        local.currents_api_key_secret_arn == null ? [] : [
+          {
+            name      = "CURRENTS_API_KEY"
+            valueFrom = local.currents_api_key_secret_arn
           }
         ],
       )
