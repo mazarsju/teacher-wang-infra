@@ -228,16 +228,27 @@ Toggle in `environments/prod/main.tf`. See [`ecs-archi-decision.md`](ecs-archi-d
 
 | Setting | Value | Rationale |
 | --- | --- | --- |
-| Cluster | `teacher-wang-prod-ecs` | One cluster for frontend + backend |
-| Capacity | 1× on-demand `t4g.small` (min 0, max 2; `ecs_use_spot = false`) | ARM host; bin-pack both apps; on-demand avoids Spot reclaim outages |
+| Cluster | `teacher-wang-prod-ecs` | One cluster for frontend + backend + Grafana |
+| Capacity | 1× on-demand `t4g.small` (min 0, max 2; `ecs_use_spot = false`) | ARM host; bin-pack all three services; on-demand avoids Spot reclaim outages |
 | Subnets | Public + public IP | Pull from ECR without NAT |
 | Instance SG | `app` | Tasks/instances can reach RDS on 5432 |
 | Instance IAM | ECS container service role + `AmazonSSMManagedInstanceCore` | SSM Session Manager for local RDS tunnels (free) |
 | Backend task | 512 CPU / 512 MiB, host port 5000 | Fits with frontend on one `t4g.small` |
 | Frontend task | 256 CPU / 256 MiB, host port 8080 | Static/nginx-style container |
+| Grafana task | 256 CPU / 256 MiB, host port 3000 | Private OSS; SSM port-forward only; CloudWatch plugin |
 | Env / secrets | `DB_*` + `DB_PASSWORD` from Secrets Manager; `LLM_API_KEY` + `CURRENTS_API_KEY` + `GUARDIAN_API_KEY` from Secrets Manager; `LLM_MODEL` + `COGNITO_*` as env | Password and API keys not in task JSON plaintext |
-| Logs | `/ecs/.../backend` and `/frontend`, 7-day retention | Cap CloudWatch cost |
+| Logs | `/ecs/.../backend`, `/frontend`, and `/grafana`, 7-day retention | Cap CloudWatch cost |
 | Insights | Disabled | Avoid CloudWatch ingestion cost |
+
+```mermaid
+flowchart LR
+  Ops([Operator]) -->|SSM port-forward :3000| Host["ECS EC2 t4g.small"]
+  Host --> Grafana["Grafana OSS"]
+  Grafana -->|grafana-task IAM role| CW["CloudWatch Logs + metrics"]
+  CW --> BE["/ecs/.../backend"]
+  CW --> FE["/ecs/.../frontend"]
+  CW --> Lambda["/aws/lambda/...-cognito-pre-signup"]
+```
 
 ### ALB (with `enable_ecs`)
 
@@ -392,7 +403,8 @@ Summary:
 | CloudFront + maintenance S3 | ~$0 under free allowances | Custom 502/503/504 → maintenance.html |
 | Route 53 hosted zone | ~$0.50/mo when `alb_domain_name` set | `teacherwang.xyz` (Namecheap registration) |
 | ACM public certs | Free | ALB (`eu-west-1`) + CloudFront (`us-east-1`) |
-| ECS task logs (7-day retention) | Low | `/ecs/…/backend` and `/frontend` |
+| ECS task logs (7-day retention) | Low | `/ecs/…/backend`, `/frontend`, `/grafana` |
+| Grafana OSS on ECS | ~$0 extra compute | Shares the existing `t4g.small`; Docker Hub image; Logs Insights ~$0.005/GB scanned |
 | Public IPv4 on ECS instances | ~$3.6/mo each when associated | Public subnet placement (no NAT) |
 | EKS control plane | Avoided (~$73/mo) | See [`ecs-archi-decision.md`](ecs-archi-decision.md) |
 | Per-AZ NAT | Avoided | Would multiply NAT cost; single NAT is enough for now |

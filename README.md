@@ -42,6 +42,7 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 | Identity | **Amazon Cognito** User Pool (password + Google IdP) |
 | Google SSO project | GCP project `teacher-wang` (module.gcp); OAuth Web client via Console |
 | Secrets (now) | RDS master password + **LLM API key** in **Secrets Manager**; Google OAuth via `TF_VAR_*` |
+| Observability | **Grafana OSS** on ECS (private; SSM port-forward); **CloudWatch** Logs + metrics |
 | Credentials (now) | Local gitignored `config` + gcloud ADC for GCP |
 | Cost posture | Cheapest viable defaults (see `agent.md`) |
 
@@ -56,8 +57,8 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 - **Security groups** — ALB (80/443 public; origin gated by `X-Origin-Verify` on listeners), app (from ALB), and DB (5432 from app)
 - **RDS** — PostgreSQL 16, `db.t4g.micro`, single-AZ, private subnets; master password in Secrets Manager
 - **ECR** — private repos for backend and frontend images (AES256, scan-on-push, lifecycle retention)
-- **ECS** — optional (`enable_ecs`); free control plane + `t4g.small` capacity (`ecs_use_spot = false` in prod for availability); backend/frontend task definitions and services (off by default); instance role includes SSM for local RDS port-forwarding
-- **SSM Session Manager** — free; tunnel to private RDS via the ECS host (no bastion, RDS stays non-public)
+- **ECS** — optional (`enable_ecs`); free control plane + `t4g.small` capacity (`ecs_use_spot = false` in prod for availability); backend/frontend/grafana task definitions and services (off by default); instance role includes SSM for local RDS and Grafana port-forwarding
+- **SSM Session Manager** — free; tunnel to private RDS via the ECS host, or to Grafana on host `:3000` (no bastion, RDS stays non-public)
 - **ALB** — optional with ECS; CloudFront origin on :80 → frontend only (backend stays off the ALB)
 - **CloudFront** — apex HTTPS for `teacherwang.xyz`; on ALB 502/503/504 serves a styled maintenance page from S3
 - **S3 (maintenance)** — private bucket + OAC for `maintenance.html` (Welcome Auth–style static page)
@@ -69,6 +70,8 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 - **Secrets Manager** — RDS master password (RDS-managed); optional Google OAuth JSON; **LLM API key** (`TF_VAR_llm_api_key`) injected into the backend task as `LLM_API_KEY`; **Currents API key** (`TF_VAR_currents_api_key`) injected into the backend task as `CURRENTS_API_KEY`; **Guardian API key** (`TF_VAR_guardian_api_key`) injected into the backend task as `GUARDIAN_API_KEY`
 - **Lambda (Cognito Pre Sign-up)** — enforces unique email; links Google SSO to an existing password user with the same email (`AdminLinkProviderForUser`); publishes to SNS on every genuinely new user
 - **SNS** — `cognito-new-user` topic; email subscription (`mazarsju@gmail.com`) alerts on new Cognito sign-ups (native or first-time Google)
+- **CloudWatch** — ECS task log groups (`/ecs/…/backend`, `/frontend`, `/grafana`); free-metrics **system-status** dashboard when ECS is on; Logs Insights via Grafana (~$0.005/GB scanned)
+- **Grafana OSS** — third ECS service on the existing host; not on the ALB; CloudWatch data source provisioned at startup; admin password via `terraform output -raw grafana_admin_password`
 
 **GCP (Google SSO)**
 
@@ -99,7 +102,7 @@ teacher-wang-infra/
 │   ├── tagging-and-naming.md                 # Resource Name pattern and required tags
 │   └── archived/                             # Obsolete *-archi-decision.md files
 ├── modules/
-│   ├── aws/                 # AWS: naming, vpc, SGs, state, rds, ecr, cognito, llm, ecs, alb, …
+│   ├── aws/                 # AWS: naming, vpc, SGs, state, rds, ecr, cognito, llm, ecs, grafana, alb, …
 │   └── gcp/                 # GCP: project, billing, APIs + OAuth Console checklist for Google SSO
 └── environments/
     ├── common/              # Shared defaults module (project, region, AZ count)
@@ -250,6 +253,7 @@ When enabled, Terraform also creates:
 | --- | --- | --- | --- |
 | Frontend | **Public** via CloudFront → ALB `:80` → target group | 8080 | 256 CPU / 256 MiB |
 | Backend | **VPC-local only** (not on the ALB) | 5000 | 512 CPU / 512 MiB |
+| Grafana | **Private** (SSM port-forward only; not on the ALB) | 3000 | 256 CPU / 256 MiB |
 
 - Frontend URL: `http://$(terraform output -raw alb_dns_name)`
 - Backend receives `DB_*` / `DB_PASSWORD` and `COGNITO_*` (pool id, client id, issuer, region); frontend receives `BACKEND_UPSTREAM` (`http://172.17.0.1:5000`) plus public Cognito ids for a future SPA login.
@@ -289,6 +293,43 @@ psql "host=127.0.0.1 port=15432 dbname=${DBNAME} user=teacherwang sslmode=requir
 ```
 
 After the first apply that attaches `AmazonSSMManagedInstanceCore`, wait a minute for the instance to appear in SSM. If it never shows up, reboot the ECS instance once.
+
+### Grafana (CloudWatch Logs)
+
+Private **Grafana OSS** runs as a third ECS service on the same host. It is **not** on the ALB — reach it via SSM port-forward (same instance lookup as RDS).
+
+**Prerequisites:** `enable_ecs = true`, Grafana service running, Session Manager plugin installed.
+
+```bash
+cd environments/prod
+
+NAME_TAG=$(terraform output -raw ecs_instance_name_tag)
+GRAFANA_PORT=$(terraform output -raw ecs_grafana_host_port)
+
+INSTANCE_ID=$(aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=${NAME_TAG}" "Name=instance-state-name,Values=running" \
+  --query 'Reservations[0].Instances[0].InstanceId' --output text)
+
+# Terminal A — keep the tunnel open
+aws ssm start-session \
+  --target "$INSTANCE_ID" \
+  --document-name AWS-StartPortForwardingSession \
+  --parameters "{\"portNumber\":[\"${GRAFANA_PORT}\"],\"localPortNumber\":[\"${GRAFANA_PORT}\"]}"
+
+# Browser — user from terraform output grafana_admin_user; password is sensitive
+open "$(terraform output -raw grafana_url)"
+terraform output -raw grafana_admin_password
+```
+
+In Grafana: **Explore → CloudWatch → Logs**. The CloudWatch data source is provisioned automatically; pick log groups such as `/ecs/teacher-wang-prod/backend`, `/ecs/teacher-wang-prod/frontend`, or `/aws/lambda/teacher-wang-prod-cognito-pre-signup`. Metrics from the free **system-status** CloudWatch dashboard are also available in Explore.
+
+Backend access logs include `request_id=…` (also returned as `X-Request-Id`). To follow one request:
+
+```
+fields @timestamp, @message
+| filter @message like /request_id=YOUR_ID/
+| sort @timestamp asc
+```
 
 ### Cognito (end-user identity)
 
@@ -448,10 +489,12 @@ Decision record: [`docs/multi-user-archi-decision.md`](docs/multi-user-archi-dec
 - [x] Store app secrets in Secrets Manager (`LLM_API_KEY`; RDS + Google OAuth already)
 - [ ] Pipeline to build images, push to ECR, and apply Terraform / deploy
 
-### 8. Observability _(later)_
+### 8. Observability _(in progress)_
 
 - [ ] Health checks on ALB / ECS tasks
-- [ ] Basic CloudWatch dashboards and alarms
+- [x] Basic CloudWatch **system-status** dashboard (ALB, ECS, RDS metrics)
+- [x] Private **Grafana OSS** on ECS with CloudWatch Logs data source (SSM port-forward)
+- [ ] CloudWatch alarms
 
 ### 9. Hardening & cost _(later)_
 

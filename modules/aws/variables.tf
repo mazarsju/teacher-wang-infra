@@ -157,6 +157,42 @@ variable "ecs_log_retention_days" {
   default     = 7
 }
 
+variable "ecs_grafana_image" {
+  description = "Grafana OSS image (linux/arm64) for the private observability service"
+  type        = string
+  default     = "grafana/grafana-oss:11.5.2"
+}
+
+variable "ecs_grafana_cpu" {
+  description = "CPU units for the Grafana task (1024 = 1 vCPU)"
+  type        = number
+  default     = 256
+}
+
+variable "ecs_grafana_memory" {
+  description = "Memory (MiB) for the Grafana task"
+  type        = number
+  default     = 256
+}
+
+variable "ecs_grafana_container_port" {
+  description = "Container port exposed by Grafana"
+  type        = number
+  default     = 3000
+}
+
+variable "ecs_grafana_host_port" {
+  description = "Host port on the ECS instance mapped to Grafana (SSM port-forward target)"
+  type        = number
+  default     = 3000
+}
+
+variable "ecs_grafana_desired_count" {
+  description = "Initial desired count for the Grafana ECS service (0 to pause without destroying IAM/logs)"
+  type        = number
+  default     = 1
+}
+
 variable "alb_frontend_health_check_path" {
   description = "HTTP health check path for the frontend target group (app serves GET /health from nginx)"
   type        = string

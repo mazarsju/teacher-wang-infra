@@ -48,6 +48,9 @@ Implemented in Terraform as `local.name_prefix = "${var.project_name}-${var.envi
 | ECS task IAM role | `teacher-wang-prod-ecs-task` |
 | ECS backend service / task family | `teacher-wang-prod-backend` |
 | ECS frontend service / task family | `teacher-wang-prod-frontend` |
+| ECS Grafana service / task family | `teacher-wang-prod-grafana` |
+| ECS Grafana task IAM role | `teacher-wang-prod-grafana-task` |
+| ECS Grafana log group | `/ecs/teacher-wang-prod/grafana` |
 | ALB | `teacher-wang-prod-alb` |
 | ALB frontend target group | `teacher-wang-prod-frontend` |
 | CloudFront distribution (Name tag) | `teacher-wang-prod-cdn` |

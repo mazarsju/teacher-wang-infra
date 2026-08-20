@@ -203,6 +203,42 @@ output "ecs_frontend_log_group_name" {
   value       = try(aws_cloudwatch_log_group.ecs_frontend[0].name, null)
 }
 
+output "ecs_grafana_service_name" {
+  description = "ECS Grafana service name (null when enable_ecs is false)"
+  value       = try(aws_ecs_service.grafana[0].name, null)
+}
+
+output "ecs_grafana_task_definition_arn" {
+  description = "Grafana task definition ARN (null when enable_ecs is false)"
+  value       = try(aws_ecs_task_definition.grafana[0].arn, null)
+}
+
+output "ecs_grafana_log_group_name" {
+  description = "CloudWatch log group for Grafana tasks (null when enable_ecs is false)"
+  value       = try(aws_cloudwatch_log_group.grafana[0].name, null)
+}
+
+output "grafana_url" {
+  description = "Grafana URL after SSM port-forward to ecs_grafana_host_port (null when enable_ecs is false)"
+  value       = var.enable_ecs ? "http://127.0.0.1:${var.ecs_grafana_host_port}" : null
+}
+
+output "grafana_admin_user" {
+  description = "Grafana admin username (null when enable_ecs is false)"
+  value       = var.enable_ecs ? "admin" : null
+}
+
+output "grafana_admin_password" {
+  description = "Grafana admin password (null when enable_ecs is false)"
+  value       = try(random_password.grafana_admin[0].result, null)
+  sensitive   = true
+}
+
+output "ecs_grafana_host_port" {
+  description = "Host port for SSM port-forward to Grafana (null when enable_ecs is false)"
+  value       = var.enable_ecs ? var.ecs_grafana_host_port : null
+}
+
 output "alb_arn" {
   description = "Public ALB ARN (null when enable_ecs is false)"
   value       = try(aws_lb.app[0].arn, null)

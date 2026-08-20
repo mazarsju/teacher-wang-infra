@@ -199,6 +199,42 @@ output "ecs_frontend_log_group_name" {
   value       = module.aws.ecs_frontend_log_group_name
 }
 
+output "ecs_grafana_service_name" {
+  description = "ECS Grafana service name (null when enable_ecs is false)"
+  value       = module.aws.ecs_grafana_service_name
+}
+
+output "ecs_grafana_task_definition_arn" {
+  description = "Grafana task definition ARN (null when enable_ecs is false)"
+  value       = module.aws.ecs_grafana_task_definition_arn
+}
+
+output "ecs_grafana_log_group_name" {
+  description = "CloudWatch log group for Grafana tasks (null when enable_ecs is false)"
+  value       = module.aws.ecs_grafana_log_group_name
+}
+
+output "grafana_url" {
+  description = "Grafana URL after SSM port-forward to ecs_grafana_host_port (null when enable_ecs is false)"
+  value       = module.aws.grafana_url
+}
+
+output "grafana_admin_user" {
+  description = "Grafana admin username (null when enable_ecs is false)"
+  value       = module.aws.grafana_admin_user
+}
+
+output "grafana_admin_password" {
+  description = "Grafana admin password (null when enable_ecs is false)"
+  value       = module.aws.grafana_admin_password
+  sensitive   = true
+}
+
+output "ecs_grafana_host_port" {
+  description = "Host port for SSM port-forward to Grafana (null when enable_ecs is false)"
+  value       = module.aws.ecs_grafana_host_port
+}
+
 output "alb_arn" {
   description = "Public ALB ARN (null when enable_ecs is false)"
   value       = module.aws.alb_arn
