@@ -66,7 +66,7 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 - **Route 53** — public hosted zone for `teacherwang.xyz` when `alb_domain_name` is set (~$0.50/mo); apex → CloudFront
 - **ACM** — free certs for ALB (`eu-west-1`) and CloudFront (`us-east-1`), DNS-validated via Route 53
 - **Cognito** — User Pool + public app client + Hosted UI domain; optional Google IdP when `TF_VAR_cognito_google_client_*` are set; ECS tasks get `COGNITO_*` env
-- **Secrets Manager** — RDS master password (RDS-managed); optional Google OAuth JSON; **LLM API key** (`TF_VAR_llm_api_key`) injected into the backend task as `LLM_API_KEY`; **Currents API key** (`TF_VAR_currents_api_key`) injected into the backend task as `CURRENTS_API_KEY`
+- **Secrets Manager** — RDS master password (RDS-managed); optional Google OAuth JSON; **LLM API key** (`TF_VAR_llm_api_key`) injected into the backend task as `LLM_API_KEY`; **Currents API key** (`TF_VAR_currents_api_key`) injected into the backend task as `CURRENTS_API_KEY`; **Guardian API key** (`TF_VAR_guardian_api_key`) injected into the backend task as `GUARDIAN_API_KEY`
 - **Lambda (Cognito Pre Sign-up)** — enforces unique email; links Google SSO to an existing password user with the same email (`AdminLinkProviderForUser`); publishes to SNS on every genuinely new user
 - **SNS** — `cognito-new-user` topic; email subscription (`mazarsju@gmail.com`) alerts on new Cognito sign-ups (native or first-time Google)
 
@@ -377,6 +377,18 @@ terraform apply
 ```
 
 Alternative: create the secret yourself and set `TF_VAR_currents_api_key_secret_arn` instead of the key value.
+
+### Guardian API key
+
+The backend task gets `GUARDIAN_API_KEY` from Secrets Manager (same pattern as the LLM key above).
+
+```bash
+export TF_VAR_guardian_api_key="...."
+cd environments/prod
+terraform apply
+```
+
+Alternative: create the secret yourself and set `TF_VAR_guardian_api_key_secret_arn` instead of the key value.
 
 ## Roadmap
 

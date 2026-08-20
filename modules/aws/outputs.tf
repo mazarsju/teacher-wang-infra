@@ -346,6 +346,12 @@ output "currents_api_key_secret_arn" {
   sensitive   = true
 }
 
+output "guardian_api_key_secret_arn" {
+  description = "Secrets Manager ARN for the Guardian API key when configured (null otherwise)"
+  value       = local.guardian_api_key_secret_arn
+  sensitive   = true
+}
+
 output "llm_model" {
   description = "LLM model id passed to the backend as LLM_MODEL"
   value       = var.llm_model

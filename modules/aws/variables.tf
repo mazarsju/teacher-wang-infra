@@ -243,6 +243,19 @@ variable "currents_api_key_secret_arn" {
   default     = null
 }
 
+variable "guardian_api_key" {
+  description = "Guardian API key for the backend. Prefer TF_VAR_guardian_api_key; stored in Secrets Manager and injected into the ECS task. Null skips the secret (unless guardian_api_key_secret_arn is set)."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "guardian_api_key_secret_arn" {
+  description = "Optional Secrets Manager secret ARN for a plain-string Guardian API key. Alternative to TF_VAR_guardian_api_key."
+  type        = string
+  default     = null
+}
+
 variable "additional_tags" {
   description = "Extra tags merged onto taggable resources (on top of provider default_tags)"
   type        = map(string)

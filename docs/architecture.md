@@ -9,7 +9,7 @@ Multi-user auth / tenancy / shared data: [`multi-user-archi-decision.md`](multi-
 ## Current state (networking + data + registry + Cognito + optional ECS + CloudFront)
 
 Provisioned today: remote state, VPC, subnets, IGW, optional single NAT, route tables, security group baselines, RDS PostgreSQL (single-AZ, `db.t4g.micro`), ECR repositories for backend/frontend images, and a **Cognito User Pool** (app client + Hosted UI domain; optional Google IdP when OAuth secrets are set).
-ECS is **optional** via `enable_ecs` (default `false`) — control plane is free; cost is the EC2 instance + ALB. Prod uses **on-demand** `t4g.small` (`ecs_use_spot = false`) for capacity reliability; Spot remains available via that toggle. When enabled, backend/frontend services, a **public ALB (frontend only)**, and **CloudFront** (apex DNS + deploy maintenance page) are created too; tasks receive Cognito env vars for JWT verification, `CONVERSATION_LOGS_*` pointing at the private conversation-logs S3 bucket (`users/{cognito_sub}/…`), `LLM_MODEL` as env, `LLM_API_KEY` from Secrets Manager when seeded via `TF_VAR_llm_api_key` (or an existing secret ARN), and `CURRENTS_API_KEY` from Secrets Manager when seeded via `TF_VAR_currents_api_key` (or an existing secret ARN).
+ECS is **optional** via `enable_ecs` (default `false`) — control plane is free; cost is the EC2 instance + ALB. Prod uses **on-demand** `t4g.small` (`ecs_use_spot = false`) for capacity reliability; Spot remains available via that toggle. When enabled, backend/frontend services, a **public ALB (frontend only)**, and **CloudFront** (apex DNS + deploy maintenance page) are created too; tasks receive Cognito env vars for JWT verification, `CONVERSATION_LOGS_*` pointing at the private conversation-logs S3 bucket (`users/{cognito_sub}/…`), `LLM_MODEL` as env, `LLM_API_KEY` from Secrets Manager when seeded via `TF_VAR_llm_api_key` (or an existing secret ARN), `CURRENTS_API_KEY` from Secrets Manager when seeded via `TF_VAR_currents_api_key` (or an existing secret ARN), and `GUARDIAN_API_KEY` from Secrets Manager when seeded via `TF_VAR_guardian_api_key` (or an existing secret ARN).
 DNS/TLS for **`teacherwang.xyz`** (registered at **Namecheap**; Route 53 + ACM via `alb_domain_name`); public HTTPS is on CloudFront when ECS is on.
 
 ### High-level AWS account
@@ -235,7 +235,7 @@ Toggle in `environments/prod/main.tf`. See [`ecs-archi-decision.md`](ecs-archi-d
 | Instance IAM | ECS container service role + `AmazonSSMManagedInstanceCore` | SSM Session Manager for local RDS tunnels (free) |
 | Backend task | 512 CPU / 512 MiB, host port 5000 | Fits with frontend on one `t4g.small` |
 | Frontend task | 256 CPU / 256 MiB, host port 8080 | Static/nginx-style container |
-| Env / secrets | `DB_*` + `DB_PASSWORD` from Secrets Manager; `LLM_API_KEY` + `CURRENTS_API_KEY` from Secrets Manager; `LLM_MODEL` + `COGNITO_*` as env | Password and API keys not in task JSON plaintext |
+| Env / secrets | `DB_*` + `DB_PASSWORD` from Secrets Manager; `LLM_API_KEY` + `CURRENTS_API_KEY` + `GUARDIAN_API_KEY` from Secrets Manager; `LLM_MODEL` + `COGNITO_*` as env | Password and API keys not in task JSON plaintext |
 | Logs | `/ecs/.../backend` and `/frontend`, 7-day retention | Cap CloudWatch cost |
 | Insights | Disabled | Avoid CloudWatch ingestion cost |
 
@@ -383,6 +383,7 @@ Summary:
 | RDS-managed Secrets Manager secret | Paid (~$0.40/mo) | Master password |
 | LLM API key Secrets Manager secret | Paid (~$0.40/mo) when seeded via `TF_VAR_llm_api_key` | Backend `LLM_API_KEY` |
 | Currents API key Secrets Manager secret | Paid (~$0.40/mo) when seeded via `TF_VAR_currents_api_key` | Backend `CURRENTS_API_KEY` |
+| Guardian API key Secrets Manager secret | Paid (~$0.40/mo) when seeded via `TF_VAR_guardian_api_key` | Backend `GUARDIAN_API_KEY` |
 | Cognito User Pool | ~$0 under free-tier MAU | Google IdP optional; no always-on compute |
 | ECR (empty / light use) | Near-free | Storage + data transfer; lifecycle keeps image count low |
 | ECS control plane | **Free** | Why we chose ECS over EKS |

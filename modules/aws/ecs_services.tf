@@ -75,6 +75,18 @@ data "aws_iam_policy_document" "ecs_task_execution_secrets" {
       ]
     }
   }
+
+  dynamic "statement" {
+    for_each = local.guardian_api_key_secret_arn != null ? [1] : []
+
+    content {
+      sid     = "ReadGuardianApiKeySecret"
+      actions = ["secretsmanager:GetSecretValue"]
+      resources = [
+        local.guardian_api_key_secret_arn,
+      ]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
@@ -174,6 +186,12 @@ resource "aws_ecs_task_definition" "backend" {
           {
             name      = "CURRENTS_API_KEY"
             valueFrom = local.currents_api_key_secret_arn
+          }
+        ],
+        local.guardian_api_key_secret_arn == null ? [] : [
+          {
+            name      = "GUARDIAN_API_KEY"
+            valueFrom = local.guardian_api_key_secret_arn
           }
         ],
       )

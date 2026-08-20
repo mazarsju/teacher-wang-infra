@@ -49,6 +49,19 @@ variable "currents_api_key_secret_arn" {
   default     = null
 }
 
+variable "guardian_api_key" {
+  description = "Guardian API key for the backend. Prefer TF_VAR_guardian_api_key; stored in Secrets Manager."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "guardian_api_key_secret_arn" {
+  description = "Optional Secrets Manager ARN for a plain-string Guardian API key (alternative to TF_VAR_guardian_api_key)."
+  type        = string
+  default     = null
+}
+
 variable "gcp_project_id" {
   description = "GCP project ID for Google SSO OAuth client (Console)"
   type        = string

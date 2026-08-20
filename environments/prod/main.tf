@@ -51,6 +51,10 @@ module "aws" {
   # Currents API key. Seed via TF_VAR_currents_api_key (Secrets Manager).
   currents_api_key            = var.currents_api_key
   currents_api_key_secret_arn = var.currents_api_key_secret_arn
+
+  # Guardian API key. Seed via TF_VAR_guardian_api_key (Secrets Manager).
+  guardian_api_key            = var.guardian_api_key
+  guardian_api_key_secret_arn = var.guardian_api_key_secret_arn
 }
 
 # GCP project already exists (teacher-wang). Terraform manages billing link + APIs only.
