@@ -55,6 +55,13 @@ resource "aws_ecs_task_definition" "weekly_articles" {
     Name = "${local.name_prefix}-weekly-articles"
     Tier = "private"
   })
+
+  lifecycle {
+    precondition {
+      condition     = local.guardian_api_key_secret_arn != null
+      error_message = "Weekly-articles needs GUARDIAN_API_KEY in the task definition. Source config (TF_VAR_guardian_api_key) or set guardian_api_key_secret_arn, then apply. The scheduler uses this same task definition."
+    }
+  }
 }
 
 data "aws_iam_policy_document" "scheduler_weekly_articles_assume" {

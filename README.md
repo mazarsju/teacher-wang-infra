@@ -259,6 +259,21 @@ When enabled, Terraform also creates:
 
 EventBridge Scheduler also runs a **weekly-articles** one-shot task (same backend image and env/secrets, no host port) every **Monday 08:00 UTC**: `python3 -m backend.jobs.generate_weekly_articles`. Logs: `/ecs/teacher-wang-prod/weekly-articles`.
 
+Scheduler has no invoke API. To run the same job immediately (from `environments/prod`, with `config` sourced):
+
+```bash
+aws ecs run-task --cluster "$(terraform output -raw ecs_cluster_name)" --task-definition teacher-wang-prod-weekly-articles --capacity-provider-strategy "capacityProvider=$(terraform output -raw ecs_capacity_provider_name),weight=1" --count 1 --region "$(terraform output -raw aws_region)"
+```
+
+Status (RUNNING while it works, STOPPED when done):
+
+```bash
+aws ecs list-tasks --cluster "$(terraform output -raw ecs_cluster_name)" --family teacher-wang-prod-weekly-articles --desired-status RUNNING --region "$(terraform output -raw aws_region)"
+aws logs tail "$(terraform output -raw ecs_weekly_articles_log_group_name)" --follow --since 1h --region "$(terraform output -raw aws_region)"
+```
+
+In the console (region **eu-west-1**): **ECS → Clusters → `teacher-wang-prod-ecs` → Tasks** (filter family `teacher-wang-prod-weekly-articles`; include stopped). Logs: **CloudWatch → Log groups → `/ecs/teacher-wang-prod/weekly-articles`**, or Grafana Explore on that group.
+
 - Frontend URL: `http://$(terraform output -raw alb_dns_name)`
 - Backend receives `DB_*` / `DB_PASSWORD` and `COGNITO_*` (pool id, client id, issuer, region); frontend receives `BACKEND_UPSTREAM` (`http://172.17.0.1:5000`) plus public Cognito ids for a future SPA login.
 
@@ -425,7 +440,7 @@ Alternative: create the secret yourself and set `TF_VAR_currents_api_key_secret_
 
 ### Guardian API key
 
-The backend task gets `GUARDIAN_API_KEY` from Secrets Manager (same pattern as the LLM key above).
+The backend **and** weekly-articles task get `GUARDIAN_API_KEY` from Secrets Manager (same pattern as the LLM key above). Apply with `config` sourced so the secret exists; otherwise the Monday job fails with `GUARDIAN_API_KEY must be set`. The EventBridge Scheduler runs that same task definition (not a separate env).
 
 ```bash
 export TF_VAR_guardian_api_key="...."
