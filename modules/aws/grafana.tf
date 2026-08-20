@@ -10,7 +10,7 @@
 locals {
   # Minimal CloudWatch DS. Skip defaultLogGroups — nested list YAML is easy to
   # break and Grafana exits on parse errors (SSM then sees "destination port failed").
-  # Pick log groups in Explore: /ecs/.../backend, /frontend, cognito-pre-signup.
+  # Pick log groups in Explore: /ecs/.../backend, /frontend, /weekly-articles, cognito-pre-signup.
   grafana_datasource_yaml = <<-EOT
     apiVersion: 1
     datasources:

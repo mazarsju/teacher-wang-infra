@@ -9,7 +9,7 @@ Multi-user auth / tenancy / shared data: [`multi-user-archi-decision.md`](multi-
 ## Current state (networking + data + registry + Cognito + optional ECS + CloudFront)
 
 Provisioned today: remote state, VPC, subnets, IGW, optional single NAT, route tables, security group baselines, RDS PostgreSQL (single-AZ, `db.t4g.micro`), ECR repositories for backend/frontend images, and a **Cognito User Pool** (app client + Hosted UI domain; optional Google IdP when OAuth secrets are set).
-ECS is **optional** via `enable_ecs` (default `false`) — control plane is free; cost is the EC2 instance + ALB. Prod uses **on-demand** `t4g.small` (`ecs_use_spot = false`) for capacity reliability; Spot remains available via that toggle. When enabled, backend/frontend services, a **public ALB (frontend only)**, and **CloudFront** (apex DNS + deploy maintenance page) are created too; tasks receive Cognito env vars for JWT verification, `CONVERSATION_LOGS_*` pointing at the private conversation-logs S3 bucket (`users/{cognito_sub}/…`), `LLM_MODEL` as env, `LLM_API_KEY` from Secrets Manager when seeded via `TF_VAR_llm_api_key` (or an existing secret ARN), `CURRENTS_API_KEY` from Secrets Manager when seeded via `TF_VAR_currents_api_key` (or an existing secret ARN), and `GUARDIAN_API_KEY` from Secrets Manager when seeded via `TF_VAR_guardian_api_key` (or an existing secret ARN).
+ECS is **optional** via `enable_ecs` (default `false`) — control plane is free; cost is the EC2 instance + ALB. Prod uses **on-demand** `t4g.small` (`ecs_use_spot = false`) for capacity reliability; Spot remains available via that toggle. When enabled, backend/frontend services, a **public ALB (frontend only)**, and **CloudFront** (apex DNS + deploy maintenance page) are created too; tasks receive Cognito env vars for JWT verification, `CONVERSATION_LOGS_*` pointing at the private conversation-logs S3 bucket (`users/{cognito_sub}/…`), `LLM_MODEL` as env, `LLM_API_KEY` from Secrets Manager when seeded via `TF_VAR_llm_api_key` (or an existing secret ARN), `CURRENTS_API_KEY` from Secrets Manager when seeded via `TF_VAR_currents_api_key` (or an existing secret ARN), and `GUARDIAN_API_KEY` from Secrets Manager when seeded via `TF_VAR_guardian_api_key` (or an existing secret ARN). A one-shot **weekly-articles** ECS task (same backend image, command `python3 -m backend.jobs.generate_weekly_articles`) is started by **EventBridge Scheduler** every Monday 08:00 UTC.
 DNS/TLS for **`teacherwang.xyz`** (registered at **Namecheap**; Route 53 + ACM via `alb_domain_name`); public HTTPS is on CloudFront when ECS is on.
 
 ### High-level AWS account
@@ -24,6 +24,7 @@ flowchart TB
     CF["CloudFront + maintenance S3<br/>(when ECS + domain)"]
     ChatS3["S3 conversation logs<br/>teacher-wang-prod-conversation-logs-&lt;account&gt;"]
     SNS["SNS topic<br/>cognito-new-user<br/>→ email subscription"]
+    Sched["EventBridge Scheduler<br/>weekly-articles · Mon 08:00 UTC"]
 
     subgraph Region["Region: eu-west-1 (default)"]
       VPC["VPC 10.0.0.0/16"]
@@ -37,6 +38,7 @@ flowchart TB
   TF --> CF
   TF --> ChatS3
   TF --> SNS
+  TF --> Sched
   Cognito -.->|new user, via Pre Sign-up Lambda| SNS
 ```
 
@@ -236,8 +238,10 @@ Toggle in `environments/prod/main.tf`. See [`ecs-archi-decision.md`](ecs-archi-d
 | Backend task | 512 CPU / 512 MiB, host port 5000 | Fits with frontend on one `t4g.small` |
 | Frontend task | 256 CPU / 256 MiB, host port 8080 | Static/nginx-style container |
 | Grafana task | 256 CPU / 256 MiB, host port 3000 | Private OSS; SSM port-forward only; CloudWatch plugin |
+| Weekly-articles job | Same image/CPU/memory as backend; **no host port**; command `python3 -m backend.jobs.generate_weekly_articles` | One-shot `RunTask` (not a service); avoids :5000 collision with Flask |
+| Scheduler | EventBridge Scheduler `cron(0 8 ? * MON *)` UTC | Starts the weekly-articles task; ~free at this volume |
 | Env / secrets | `DB_*` + `DB_PASSWORD` from Secrets Manager; `LLM_API_KEY` + `CURRENTS_API_KEY` + `GUARDIAN_API_KEY` from Secrets Manager; `LLM_MODEL` + `COGNITO_*` as env | Password and API keys not in task JSON plaintext |
-| Logs | `/ecs/.../backend`, `/frontend`, and `/grafana`, 7-day retention | Cap CloudWatch cost |
+| Logs | `/ecs/.../backend`, `/frontend`, `/grafana`, and `/weekly-articles`, 7-day retention | Cap CloudWatch cost |
 | Insights | Disabled | Avoid CloudWatch ingestion cost |
 
 ```mermaid
@@ -247,6 +251,7 @@ flowchart LR
   Grafana -->|grafana-task IAM role| CW["CloudWatch Logs + metrics"]
   CW --> BE["/ecs/.../backend"]
   CW --> FE["/ecs/.../frontend"]
+  CW --> Job["/ecs/.../weekly-articles"]
   CW --> Lambda["/aws/lambda/...-cognito-pre-signup"]
 ```
 
@@ -320,6 +325,7 @@ flowchart TB
     subgraph Public["Public subnets"]
       FE["ECS frontend<br/>via ALB"]
       BE["ECS backend<br/>VPC-local only"]
+      Job["ECS weekly-articles job<br/>EventBridge · Mon 08:00 UTC"]
       ECS["EC2 capacity (on-demand)<br/>toggle: enable_ecs"]
     end
 
@@ -333,6 +339,7 @@ flowchart TB
   ECR["ECR<br/>backend · frontend"]
   Cognito["Cognito User Pool"]
   SM["Secrets Manager<br/>(RDS password · LLM API key)"]
+  Sched["EventBridge Scheduler<br/>Mon 08:00 UTC"]
 
   Users --> Cognito
   FE -.->|sign-in / tokens| Cognito
@@ -340,10 +347,14 @@ flowchart TB
   FE -.->|BACKEND_UPSTREAM| BE
   BE -->|verify JWT JWKS| Cognito
   BE --> RDS
+  Job --> RDS
+  Sched -->|RunTask| Job
   FE --> ECS
   BE --> ECS
+  Job --> ECS
   ECS --> ECR
   BE -.-> SM
+  Job -.-> SM
   RDS -.-> SM
 ```
 
@@ -355,7 +366,7 @@ Each environment directory is a **Terraform root**. Shared resources live in `mo
 
 | Path | Role |
 | --- | --- |
-| `modules/aws` | VPC, NAT, route tables, security groups, state bucket, RDS, ECR, Cognito, optional ECS + ALB + CloudFront, Route 53 + ACM |
+| `modules/aws` | VPC, NAT, route tables, security groups, state bucket, RDS, ECR, Cognito, optional ECS + ALB + CloudFront + weekly-articles Scheduler, Route 53 + ACM |
 | `modules/gcp` | GCP project, billing link, APIs, OAuth Console checklist for Google SSO |
 | `environments/common` | Shared defaults module (`project_name`, `aws_region`, `az_count`) |
 | `environments/prod` | Prod root — `cd environments/prod && terraform plan` |
@@ -403,7 +414,8 @@ Summary:
 | CloudFront + maintenance S3 | ~$0 under free allowances | Custom 502/503/504 → maintenance.html |
 | Route 53 hosted zone | ~$0.50/mo when `alb_domain_name` set | `teacherwang.xyz` (Namecheap registration) |
 | ACM public certs | Free | ALB (`eu-west-1`) + CloudFront (`us-east-1`) |
-| ECS task logs (7-day retention) | Low | `/ecs/…/backend`, `/frontend`, `/grafana` |
+| ECS task logs (7-day retention) | Low | `/ecs/…/backend`, `/frontend`, `/grafana`, `/weekly-articles` |
+| EventBridge Scheduler | ~$0 | One invocation per week |
 | Grafana OSS on ECS | ~$0 extra compute | Shares the existing `t4g.small`; Docker Hub image; Logs Insights ~$0.005/GB scanned |
 | Public IPv4 on ECS instances | ~$3.6/mo each when associated | Public subnet placement (no NAT) |
 | EKS control plane | Avoided (~$73/mo) | See [`ecs-archi-decision.md`](ecs-archi-decision.md) |

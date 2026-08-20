@@ -15,6 +15,50 @@ locals {
     "${aws_db_instance.main.master_user_secret[0].secret_arn}:password::",
     null
   )
+
+  # Shared by the long-running backend service and one-shot jobs (same image + env).
+  ecs_backend_environment = [
+    { name = "ENVIRONMENT", value = var.environment },
+    { name = "DB_HOST", value = aws_db_instance.main.address },
+    { name = "DB_PORT", value = tostring(aws_db_instance.main.port) },
+    { name = "DB_NAME", value = aws_db_instance.main.db_name },
+    { name = "DB_USER", value = var.db_username },
+    { name = "COGNITO_REGION", value = var.aws_region },
+    { name = "COGNITO_USER_POOL_ID", value = aws_cognito_user_pool.main.id },
+    { name = "COGNITO_APP_CLIENT_ID", value = aws_cognito_user_pool_client.app.id },
+    { name = "COGNITO_ISSUER", value = local.cognito_issuer },
+    { name = "CONVERSATION_LOGS_BACKEND", value = "s3" },
+    { name = "CONVERSATION_LOGS_S3_BUCKET", value = aws_s3_bucket.conversation_logs.id },
+    { name = "CONVERSATION_LOGS_S3_REGION", value = var.aws_region },
+    { name = "LLM_MODEL", value = var.llm_model },
+  ]
+
+  ecs_backend_secrets = concat(
+    local.ecs_db_password_secret_arn == null ? [] : [
+      {
+        name      = "DB_PASSWORD"
+        valueFrom = local.ecs_db_password_secret_arn
+      }
+    ],
+    local.llm_api_key_secret_arn == null ? [] : [
+      {
+        name      = "LLM_API_KEY"
+        valueFrom = local.llm_api_key_secret_arn
+      }
+    ],
+    local.currents_api_key_secret_arn == null ? [] : [
+      {
+        name      = "CURRENTS_API_KEY"
+        valueFrom = local.currents_api_key_secret_arn
+      }
+    ],
+    local.guardian_api_key_secret_arn == null ? [] : [
+      {
+        name      = "GUARDIAN_API_KEY"
+        valueFrom = local.guardian_api_key_secret_arn
+      }
+    ],
+  )
 }
 
 resource "aws_cloudwatch_log_group" "ecs_backend" {
@@ -153,48 +197,8 @@ resource "aws_ecs_task_definition" "backend" {
         }
       ]
 
-      environment = [
-        { name = "ENVIRONMENT", value = var.environment },
-        { name = "DB_HOST", value = aws_db_instance.main.address },
-        { name = "DB_PORT", value = tostring(aws_db_instance.main.port) },
-        { name = "DB_NAME", value = aws_db_instance.main.db_name },
-        { name = "DB_USER", value = var.db_username },
-        { name = "COGNITO_REGION", value = var.aws_region },
-        { name = "COGNITO_USER_POOL_ID", value = aws_cognito_user_pool.main.id },
-        { name = "COGNITO_APP_CLIENT_ID", value = aws_cognito_user_pool_client.app.id },
-        { name = "COGNITO_ISSUER", value = local.cognito_issuer },
-        { name = "CONVERSATION_LOGS_BACKEND", value = "s3" },
-        { name = "CONVERSATION_LOGS_S3_BUCKET", value = aws_s3_bucket.conversation_logs.id },
-        { name = "CONVERSATION_LOGS_S3_REGION", value = var.aws_region },
-        { name = "LLM_MODEL", value = var.llm_model },
-      ]
-
-      secrets = concat(
-        local.ecs_db_password_secret_arn == null ? [] : [
-          {
-            name      = "DB_PASSWORD"
-            valueFrom = local.ecs_db_password_secret_arn
-          }
-        ],
-        local.llm_api_key_secret_arn == null ? [] : [
-          {
-            name      = "LLM_API_KEY"
-            valueFrom = local.llm_api_key_secret_arn
-          }
-        ],
-        local.currents_api_key_secret_arn == null ? [] : [
-          {
-            name      = "CURRENTS_API_KEY"
-            valueFrom = local.currents_api_key_secret_arn
-          }
-        ],
-        local.guardian_api_key_secret_arn == null ? [] : [
-          {
-            name      = "GUARDIAN_API_KEY"
-            valueFrom = local.guardian_api_key_secret_arn
-          }
-        ],
-      )
+      environment = local.ecs_backend_environment
+      secrets     = local.ecs_backend_secrets
 
       logConfiguration = {
         logDriver = "awslogs"

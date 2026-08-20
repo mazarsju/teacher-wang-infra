@@ -43,6 +43,7 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 | Google SSO project | GCP project `teacher-wang` (module.gcp); OAuth Web client via Console |
 | Secrets (now) | RDS master password + **LLM API key** in **Secrets Manager**; Google OAuth via `TF_VAR_*` |
 | Observability | **Grafana OSS** on ECS (private; SSM port-forward); **CloudWatch** Logs + metrics |
+| Batch jobs | **EventBridge Scheduler** → ECS `RunTask` (weekly articles) |
 | Credentials (now) | Local gitignored `config` + gcloud ADC for GCP |
 | Cost posture | Cheapest viable defaults (see `agent.md`) |
 
@@ -57,7 +58,7 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 - **Security groups** — ALB (80/443 public; origin gated by `X-Origin-Verify` on listeners), app (from ALB), and DB (5432 from app)
 - **RDS** — PostgreSQL 16, `db.t4g.micro`, single-AZ, private subnets; master password in Secrets Manager
 - **ECR** — private repos for backend and frontend images (AES256, scan-on-push, lifecycle retention)
-- **ECS** — optional (`enable_ecs`); free control plane + `t4g.small` capacity (`ecs_use_spot = false` in prod for availability); backend/frontend/grafana task definitions and services (off by default); instance role includes SSM for local RDS and Grafana port-forwarding
+- **ECS** — optional (`enable_ecs`); free control plane + `t4g.small` capacity (`ecs_use_spot = false` in prod for availability); backend/frontend/grafana task definitions and services (off by default); instance role includes SSM for local RDS and Grafana port-forwarding; one-shot **weekly-articles** task (backend image, `python3 -m backend.jobs.generate_weekly_articles`)
 - **SSM Session Manager** — free; tunnel to private RDS via the ECS host, or to Grafana on host `:3000` (no bastion, RDS stays non-public)
 - **ALB** — optional with ECS; CloudFront origin on :80 → frontend only (backend stays off the ALB)
 - **CloudFront** — apex HTTPS for `teacherwang.xyz`; on ALB 502/503/504 serves a styled maintenance page from S3
@@ -70,7 +71,8 @@ Obsolete decisions are kept under [`docs/archived/`](docs/archived/) (none yet).
 - **Secrets Manager** — RDS master password (RDS-managed); optional Google OAuth JSON; **LLM API key** (`TF_VAR_llm_api_key`) injected into the backend task as `LLM_API_KEY`; **Currents API key** (`TF_VAR_currents_api_key`) injected into the backend task as `CURRENTS_API_KEY`; **Guardian API key** (`TF_VAR_guardian_api_key`) injected into the backend task as `GUARDIAN_API_KEY`
 - **Lambda (Cognito Pre Sign-up)** — enforces unique email; links Google SSO to an existing password user with the same email (`AdminLinkProviderForUser`); publishes to SNS on every genuinely new user
 - **SNS** — `cognito-new-user` topic; email subscription (`mazarsju@gmail.com`) alerts on new Cognito sign-ups (native or first-time Google)
-- **CloudWatch** — ECS task log groups (`/ecs/…/backend`, `/frontend`, `/grafana`); free-metrics **system-status** dashboard when ECS is on; Logs Insights via Grafana (~$0.005/GB scanned)
+- **CloudWatch** — ECS task log groups (`/ecs/…/backend`, `/frontend`, `/grafana`, `/weekly-articles`); free-metrics **system-status** dashboard when ECS is on; Logs Insights via Grafana (~$0.005/GB scanned)
+- **EventBridge Scheduler** — `cron(0 8 ? * MON *)` UTC starts the weekly-articles ECS task when ECS is on (~free at this volume)
 - **Grafana OSS** — third ECS service on the existing host; not on the ALB; CloudWatch data source provisioned at startup; admin password via `terraform output -raw grafana_admin_password`
 
 **GCP (Google SSO)**
@@ -102,7 +104,7 @@ teacher-wang-infra/
 │   ├── tagging-and-naming.md                 # Resource Name pattern and required tags
 │   └── archived/                             # Obsolete *-archi-decision.md files
 ├── modules/
-│   ├── aws/                 # AWS: naming, vpc, SGs, state, rds, ecr, cognito, llm, ecs, grafana, alb, …
+│   ├── aws/                 # AWS: naming, vpc, SGs, state, rds, ecr, cognito, llm, ecs, grafana, weekly_articles, alb, …
 │   └── gcp/                 # GCP: project, billing, APIs + OAuth Console checklist for Google SSO
 └── environments/
     ├── common/              # Shared defaults module (project, region, AZ count)
@@ -255,6 +257,8 @@ When enabled, Terraform also creates:
 | Backend | **VPC-local only** (not on the ALB) | 5000 | 512 CPU / 512 MiB |
 | Grafana | **Private** (SSM port-forward only; not on the ALB) | 3000 | 256 CPU / 256 MiB |
 
+EventBridge Scheduler also runs a **weekly-articles** one-shot task (same backend image and env/secrets, no host port) every **Monday 08:00 UTC**: `python3 -m backend.jobs.generate_weekly_articles`. Logs: `/ecs/teacher-wang-prod/weekly-articles`.
+
 - Frontend URL: `http://$(terraform output -raw alb_dns_name)`
 - Backend receives `DB_*` / `DB_PASSWORD` and `COGNITO_*` (pool id, client id, issuer, region); frontend receives `BACKEND_UPSTREAM` (`http://172.17.0.1:5000`) plus public Cognito ids for a future SPA login.
 
@@ -321,7 +325,7 @@ open "$(terraform output -raw grafana_url)"
 terraform output -raw grafana_admin_password
 ```
 
-In Grafana: **Explore → CloudWatch → Logs**. The CloudWatch data source is provisioned automatically; pick log groups such as `/ecs/teacher-wang-prod/backend`, `/ecs/teacher-wang-prod/frontend`, or `/aws/lambda/teacher-wang-prod-cognito-pre-signup`. Metrics from the free **system-status** CloudWatch dashboard are also available in Explore.
+In Grafana: **Explore → CloudWatch → Logs**. The CloudWatch data source is provisioned automatically; pick log groups such as `/ecs/teacher-wang-prod/backend`, `/ecs/teacher-wang-prod/frontend`, `/ecs/teacher-wang-prod/weekly-articles`, or `/aws/lambda/teacher-wang-prod-cognito-pre-signup`. Metrics from the free **system-status** CloudWatch dashboard are also available in Explore.
 
 Backend access logs include `request_id=…` (also returned as `X-Request-Id`). To follow one request:
 
@@ -461,6 +465,7 @@ Schema / migrations live in **[teacher-wang-app](https://github.com/mazarsju/tea
 - [x] ECR repositories for backend and frontend
 - [x] ECS cluster + EC2 capacity (gated by `enable_ecs`, default off; prod uses on-demand via `ecs_use_spot = false`; no EKS)
 - [x] ECS task definitions and services (frontend + backend)
+- [x] Weekly articles job (EventBridge Scheduler Monday 08:00 UTC → ECS `RunTask`)
 - [x] ALB ingress (public frontend only; backend VPC-local)
 - [x] Task env wiring: backend `DB_*` / `DB_PASSWORD`, frontend `BACKEND_UPSTREAM`
 

@@ -239,6 +239,21 @@ output "ecs_grafana_host_port" {
   value       = var.enable_ecs ? var.ecs_grafana_host_port : null
 }
 
+output "ecs_weekly_articles_task_definition_arn" {
+  description = "Weekly articles job task definition ARN (null when enable_ecs is false)"
+  value       = try(aws_ecs_task_definition.weekly_articles[0].arn, null)
+}
+
+output "ecs_weekly_articles_log_group_name" {
+  description = "CloudWatch log group for the weekly articles job (null when enable_ecs is false)"
+  value       = try(aws_cloudwatch_log_group.weekly_articles[0].name, null)
+}
+
+output "weekly_articles_schedule_arn" {
+  description = "EventBridge Scheduler ARN for generate_weekly_articles (null when enable_ecs is false)"
+  value       = try(aws_scheduler_schedule.weekly_articles[0].arn, null)
+}
+
 output "alb_arn" {
   description = "Public ALB ARN (null when enable_ecs is false)"
   value       = try(aws_lb.app[0].arn, null)
